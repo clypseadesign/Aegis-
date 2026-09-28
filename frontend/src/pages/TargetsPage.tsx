@@ -27,6 +27,7 @@ export function TargetsPage() {
   const [endpoint, setEndpoint] = useState('')
   const [model, setModel] = useState('')
   const [creating, setCreating] = useState(false)
+  const [attested, setAttested] = useState(false)
 
   const needsModel = PROVIDERS.find((p) => p.value === provider)?.needsModel ?? false
 
@@ -58,6 +59,14 @@ export function TargetsPage() {
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault()
+    // The backend requires an explicit affirmative attestation, so refuse to
+    // submit without it rather than sending a request it will reject.
+    if (!attested) {
+      setError(
+        'Confirm you are authorized to security-test this target before creating it.',
+      )
+      return
+    }
     setCreating(true)
     setError(null)
     try {
@@ -67,10 +76,12 @@ export function TargetsPage() {
         provider,
         endpoint,
         model: model || null,
+        authorization_attestation: true,
       })
       setName('')
       setEndpoint('')
       setModel('')
+      setAttested(false)
       setNotice('Target created.')
       await load()
     } catch (err) {
@@ -133,7 +144,11 @@ export function TargetsPage() {
             />
           </Field>
 
-          <Field label="Provider" htmlFor="target-provider">
+          <Field
+            label="Provider"
+            htmlFor="target-provider"
+            hint="Pick the one matching your endpoint. Hosted OpenAI-compatible APIs (OpenAI, Groq, Together, vLLM) use 'OpenAI-compatible API'; only a local Ollama server uses 'Ollama'. A mismatch returns HTTP 404."
+          >
             <select
               id="target-provider"
               name="provider"
@@ -176,9 +191,33 @@ export function TargetsPage() {
             </Field>
           )}
 
+          <p className="attestation-note">
+            AegisAI sends adversarial prompts to the target you configure. Only create a target
+            for a system you own or have explicit written authorization to test.
+          </p>
+
+          <div className="checkbox-field">
+            <input
+              id="target-attestation"
+              name="authorization_attestation"
+              type="checkbox"
+              required
+              checked={attested}
+              onChange={(e) => setAttested(e.target.checked)}
+            />
+            <label htmlFor="target-attestation">
+              I am authorized to security-test this target
+            </label>
+          </div>
+
           <button
             type="submit"
-            disabled={creating || projectId === '' || needsModel === true && model === ''}
+            disabled={
+              creating ||
+              projectId === '' ||
+              (needsModel && model === '') ||
+              !attested
+            }
           >
             {creating ? 'Creating…' : 'Create target'}
           </button>

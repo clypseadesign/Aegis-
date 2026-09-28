@@ -80,6 +80,8 @@ export interface Target {
   timeout_seconds: number
   rate_limit_per_minute: number
   status: TargetStatus
+  authorization_attested_by: UUID | null
+  authorization_attested_at: string | null
   created_at: string
   updated_at: string
 }
@@ -95,6 +97,13 @@ export interface TargetCreate {
   timeout_seconds?: number
   rate_limit_per_minute?: number
   status?: TargetStatus
+  /**
+   * Confirms the caller is authorized to security-test this target. The
+   * backend rejects target creation unless this is exactly `true` — see
+   * `TargetCreate.authorization_attestation` in the backend schema. The
+   * frontend enforces nothing on its own; this only shapes the request.
+   */
+  authorization_attestation: boolean
 }
 
 export type TargetUpdate = Partial<Omit<TargetCreate, 'project_id'>>

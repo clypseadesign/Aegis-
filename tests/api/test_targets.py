@@ -108,6 +108,7 @@ def _create_target(
             "timeout_seconds": 45.0,
             "rate_limit_per_minute": 120,
             "status": "active",
+            "authorization_attestation": True,
         },
     )
     assert response.status_code == 201
@@ -144,12 +145,16 @@ def test_target_create_returns_configuration_and_records_audit() -> None:
         assert body["capabilities"] == ["chat", "system_messages"]
         assert body["status"] == "active"
         assert "credential" not in body
+        assert body["authorization_attested_by"] == str(owner_id)
+        assert body["authorization_attested_at"] is not None
 
         session = create_session_factory()()
         try:
             target = session.get(Target, target_id)
             assert target is not None
             assert target.project_id == project_id
+            assert target.authorization_attested_by == owner_id
+            assert target.authorization_attested_at is not None
             audit = session.scalar(
                 select(AuditLog).where(
                     AuditLog.resource_id == str(target.id),
@@ -160,8 +165,55 @@ def test_target_create_returns_configuration_and_records_audit() -> None:
             assert owner_id is not None
             assert audit.actor_id == owner_id
             assert audit.resource_type == "target"
+
+            attestation_audit = session.scalar(
+                select(AuditLog).where(
+                    AuditLog.resource_id == str(target.id),
+                    AuditLog.action == "target.authorization_attested",
+                ),
+            )
+            assert attestation_audit is not None
+            assert attestation_audit.actor_id == owner_id
         finally:
             session.close()
+    finally:
+        if project_id is not None:
+            _cleanup_project(project_id)
+        _cleanup_user(email)
+
+
+def test_target_create_requires_authorization_attestation() -> None:
+    email = f"api-target-no-attestation-{uuid4()}@example.com"
+    project_id = None
+
+    try:
+        _register_user(email)
+        project_id = _create_project(email, f"No Attestation Project {uuid4()}")
+        headers = _auth_headers(_login(email))
+        base_payload = {
+            "project_id": str(project_id),
+            "name": f"No Attestation Target {uuid4()}",
+            "provider": "custom_rest",
+            "endpoint": "https://custom.example.com/infer",
+            "capabilities": ["chat"],
+        }
+
+        response = client.post("/api/v1/targets", headers=headers, json=base_payload)
+        assert response.status_code == 422
+
+        response = client.post(
+            "/api/v1/targets",
+            headers=headers,
+            json={**base_payload, "authorization_attestation": False},
+        )
+        assert response.status_code == 422
+
+        response = client.post(
+            "/api/v1/targets",
+            headers=headers,
+            json={**base_payload, "authorization_attestation": True},
+        )
+        assert response.status_code == 201
     finally:
         if project_id is not None:
             _cleanup_project(project_id)
@@ -380,6 +432,7 @@ def test_target_validation_rejects_invalid_configuration() -> None:
             "provider": "custom_rest",
             "endpoint": "https://custom.example.com/infer",
             "capabilities": ["chat"],
+            "authorization_attestation": True,
         }
 
         response = client.post(

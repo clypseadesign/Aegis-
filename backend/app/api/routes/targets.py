@@ -55,6 +55,21 @@ async def create_target_endpoint(
         event_metadata={"project_id": str(target.project_id)},
     )
 
+    record_audit_event(
+        session,
+        actor_id=current_user.id,
+        action="target.authorization_attested",
+        resource_type="target",
+        resource_id=str(target.id),
+        event_metadata={
+            "project_id": str(target.project_id),
+            "endpoint": target.endpoint,
+            "attested_at": target.authorization_attested_at.isoformat()
+            if target.authorization_attested_at
+            else None,
+        },
+    )
+
     return TargetResponse.model_validate(target)
 
 

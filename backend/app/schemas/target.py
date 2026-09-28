@@ -1,6 +1,7 @@
 """Target API schemas for AegisAI."""
 
 from datetime import datetime
+from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -24,6 +25,15 @@ class TargetCreate(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0, le=3600)
     rate_limit_per_minute: int = Field(default=60, ge=1, le=10000)
     status: TargetStatus = TargetStatus.ACTIVE
+    authorization_attestation: Literal[True] = Field(
+        description=(
+            "Confirms the caller is authorized to security-test this target "
+            "(e.g. they own it, or have explicit permission from its owner). "
+            "AegisAI is a security testing tool; running it against a system "
+            "without authorization may be illegal. This must be explicitly "
+            "set to true — AegisAI refuses to create a target otherwise."
+        ),
+    )
 
     @field_validator("endpoint")
     @classmethod
@@ -128,5 +138,7 @@ class TargetResponse(BaseModel):
     timeout_seconds: float
     rate_limit_per_minute: int
     status: TargetStatus
+    authorization_attested_by: UUID | None
+    authorization_attested_at: datetime | None
     created_at: datetime
     updated_at: datetime

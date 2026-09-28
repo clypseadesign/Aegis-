@@ -93,6 +93,7 @@ def _create_target(email: str, project_id: UUID, name: str = "Cred Target") -> U
             "timeout_seconds": 45.0,
             "rate_limit_per_minute": 120,
             "status": "active",
+            "authorization_attestation": True,
         },
     )
     assert response.status_code == 201

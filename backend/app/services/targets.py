@@ -1,5 +1,6 @@
 """Target service operations for AegisAI."""
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -83,6 +84,12 @@ def create_target(
         timeout_seconds=payload.timeout_seconds,
         rate_limit_per_minute=payload.rate_limit_per_minute,
         status=payload.status,
+        # `authorization_attestation` is validated as Literal[True] by the
+        # TargetCreate schema, so reaching this line means the caller has
+        # already affirmatively confirmed authorization. Record who and when
+        # for compliance evidence, distinct from an in-schema-only claim.
+        authorization_attested_by=user.id,
+        authorization_attested_at=datetime.now(UTC),
     )
 
     session.add(target)

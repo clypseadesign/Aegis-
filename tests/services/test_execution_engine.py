@@ -125,6 +125,7 @@ def _create_target(session: Session, project_id: UUID, owner: User) -> Target:
             model="test-model",
             capabilities=["chat"],
             timeout_seconds=30.0,
+            authorization_attestation=True,
         ),
         project_id,
         owner,

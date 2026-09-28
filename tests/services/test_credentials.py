@@ -67,6 +67,7 @@ def _create_target(session: Session, user: User) -> Target:
             timeout_seconds=45.0,
             rate_limit_per_minute=120,
             status=TargetStatus.ACTIVE,
+            authorization_attestation=True,
         ),
         project_id=project.id,
         user=user,

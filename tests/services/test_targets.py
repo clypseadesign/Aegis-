@@ -69,6 +69,7 @@ def create_target_payload(name: str | None = None) -> TargetCreate:
         timeout_seconds=45.0,
         rate_limit_per_minute=120,
         status=TargetStatus.ACTIVE,
+        authorization_attestation=True,
     )
 
 
@@ -100,6 +101,8 @@ def test_create_target_assigns_project_and_persists_configuration() -> None:
         assert target.status == payload.status
         assert target.created_at is not None
         assert target.updated_at is not None
+        assert target.authorization_attested_by == owner.id
+        assert target.authorization_attested_at is not None
 
         fetched = session.get(Target, target.id)
         assert fetched is not None
