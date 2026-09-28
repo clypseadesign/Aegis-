@@ -189,6 +189,28 @@ def test_ollama_adapter_parses_message_content() -> None:
     assert response.metadata["done"] is True
 
 
+def test_ollama_adapter_disables_streaming() -> None:
+    """Ollama replies with NDJSON unless streaming is explicitly disabled.
+
+    Without ``"stream": False`` the provider returns one JSON object per line,
+    which the shared response parser cannot decode, so every execution fails
+    with "model provider returned invalid JSON".
+    """
+
+    fake = FakeClient(
+        body={
+            "model": "llama3",
+            "done": True,
+            "message": {"role": "assistant", "content": "ok"},
+        }
+    )
+    adapter = OllamaAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    target = _make_target(provider=TargetProvider.OLLAMA)
+    _run(adapter.generate(target, _make_request()))
+
+    assert fake.calls[0]["json"]["stream"] is False
+
+
 def test_custom_rest_adapter_uses_configured_response_path() -> None:
     fake = FakeClient(body={"output": "custom rest reply"})
     adapter = CustomRESTAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)

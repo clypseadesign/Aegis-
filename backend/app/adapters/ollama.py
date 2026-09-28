@@ -38,6 +38,10 @@ class OllamaAdapter(BaseTargetAdapter):
             "model": target.model,
             "messages": self._messages(request),
             "options": {key: value for key, value in options.items() if value is not None},
+            # Ollama streams newline-delimited JSON by default. This adapter
+            # expects a single JSON object, so streaming must be disabled
+            # explicitly or every response fails to parse.
+            "stream": False,
         }
 
     @staticmethod
