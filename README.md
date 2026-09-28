@@ -91,6 +91,8 @@ Full setup details are in [`docs/development.md`](docs/development.md) and [`doc
 
 | Document | Contents |
 |---|---|
+| **[`docs/Manual.md`](docs/Manual.md)** | **Complete user manual — start here** |
+| [`docs/Beginner-Guide.md`](docs/Beginner-Guide.md) | Condensed quick start |
 | [`docs/development.md`](docs/development.md) | Local setup, quality gates, running tests |
 | [`docs/deployment.md`](docs/deployment.md) | VPS deployment, TLS, operations, troubleshooting |
 | [`docs/secrets-management.md`](docs/secrets-management.md) | Secret handling and rotation procedures |
