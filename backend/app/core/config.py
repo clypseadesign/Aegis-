@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     database_url: str = Field(default="")
     secret_key: str = Field(default="")
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    jwt_algorithm: str = Field(default="HS256", min_length=1)
+    access_token_expire_minutes: int = Field(default=30, gt=0)
+    allow_local_targets: bool = Field(default=False)
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":

@@ -8,12 +8,20 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
+
+def _load_metadata():
+    from app import models
+
+    _ = models
+    return Base.metadata
+
+
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = _load_metadata()
 
 
 def get_database_url() -> str:

@@ -12,3 +12,12 @@ class SystemInfoResponse(BaseModel):
     version: str
     environment: str
     status: str
+
+
+class ReadinessResponse(BaseModel):
+    """Response schema for a readiness check."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    database: str

@@ -52,3 +52,12 @@ docker-data/
 
 # AegisAI generated reports
 reports/
+
+# Agent tooling: local worktrees and UI state.
+# Worktrees contain full copies of the project including a real .env, so they
+# must never be committed. These rules are version-controlled rather than left
+# in .git/info/exclude so the protection travels with the repository.
+.kilo/worktrees/
+.kilo/agent-manager.json
+.kilocode/worktrees/
+.kilocode/agent-manager.json

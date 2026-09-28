@@ -124,6 +124,19 @@ The backend must verify that the authenticated user has permission to:
 
 Client-side authorization checks must never be considered sufficient.
 
+### Project Authorization Matrix
+
+The current project API uses authenticated ownership with administrative scope:
+
+| Role | Create | List | Read | Update | Delete |
+| --- | --- | --- | --- | --- | --- |
+| `super_admin` | Any project | All projects | All projects | All projects | All projects |
+| `admin` | Any project | All projects | All projects | All projects | All projects |
+| `user` | Own project | Own projects | Own projects | Own projects | Own projects |
+| `viewer` | No | Own projects | Own projects | No | No |
+
+Administrative scope is explicit in this implementation because project membership has not yet been modeled. Future membership-based authorization must narrow administrative access to assigned projects.
+
 ---
 
 ## 7. Network Security
