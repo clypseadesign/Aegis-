@@ -584,6 +584,25 @@ self-demotion, with a tailored message.
 
 ---
 
+### Reading a failed execution
+
+When a run fails, the **Reason** column in the Executions table explains why and
+what to do about it. A failed execution carries no security finding — the test
+never completed — so the reason is almost always a configuration or connectivity
+problem rather than a problem with the model.
+
+| Reason | What it means | Fix |
+|---|---|---|
+| *credential can no longer be read* | The encryption key changed after the credential was saved | Revoke it and store the API key again |
+| *rejected the API key* | Provider returned 401 | Check the key is active and stored on the right target |
+| *path was not found* | Provider returned 404 | Usually the wrong provider for the URL |
+| *rate limiting* | Provider returned 429 | Wait, or lower the target rate limit |
+| *server error* | Provider returned 5xx | Provider-side outage; retry later |
+| *could not parse* | Provider returned unparseable output | Confirm the provider matches the endpoint |
+| *did not respond in time* | Request timed out | Raise the target timeout, or use a smaller model |
+| *SSRF guard blocked this address* | Loopback/private address | Expected; a local model needs `ALLOW_LOCAL_TARGETS=true` |
+| *could not reach the endpoint* | Connection failed | Check the URL and that the model server is running |
+
 ## 10. Operations
 
 ### Logs

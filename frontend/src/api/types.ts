@@ -165,6 +165,8 @@ export interface Execution {
   result: ExecutionResult
   started_at: string | null
   completed_at: string | null
+  /** Populated when the run failed; explains why. */
+  error: string | null
   created_by: UUID | null
   created_at: string
   updated_at: string

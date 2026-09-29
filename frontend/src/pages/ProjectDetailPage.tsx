@@ -10,6 +10,7 @@ import {
   targetApi,
   testApi,
 } from '../api/client'
+import { explainExecutionError } from '../lib/executionErrors'
 import type {
   Evidence,
   Execution,
@@ -319,31 +320,48 @@ export function ProjectDetailPage() {
                 <th scope="col">Started</th>
                 <th scope="col">Status</th>
                 <th scope="col">Result</th>
+                <th scope="col">Reason</th>
                 <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {executions.map((execution) => (
-                <tr key={execution.id}>
-                  <td>{execution.started_at ?? execution.created_at}</td>
-                  <td>
-                    <span className={`badge badge-${execution.status}`}>{execution.status}</span>
-                  </td>
-                  <td>
-                    <span className={`badge badge-${execution.result}`}>{execution.result}</span>
-                  </td>
-                  <td>
-                    <button type="button" onClick={() => void handleSelectExecution(execution.id)}>
-                      Findings
-                    </button>{' '}
-                    {(execution.status === 'pending' || execution.status === 'running') && (
-                      <button type="button" onClick={() => void handleCancel(execution)}>
-                        Cancel
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {executions.map((execution) => {
+                const failure = explainExecutionError(execution.error)
+                return (
+                  <tr key={execution.id}>
+                    <td>{execution.started_at ?? execution.created_at}</td>
+                    <td>
+                      <span className={`badge badge-${execution.status}`}>{execution.status}</span>
+                    </td>
+                    <td>
+                      <span className={`badge badge-${execution.result}`}>{execution.result}</span>
+                    </td>
+                    <td className="failure-cell">
+                      {failure ? (
+                        <>
+                          <strong>{failure.cause}</strong>
+                          <span>{failure.action}</span>
+                        </>
+                      ) : (
+                        <span className="failure-none">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => void handleSelectExecution(execution.id)}
+                      >
+                        Findings
+                      </button>{' '}
+                      {(execution.status === 'pending' || execution.status === 'running') && (
+                        <button type="button" onClick={() => void handleCancel(execution)}>
+                          Cancel
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}

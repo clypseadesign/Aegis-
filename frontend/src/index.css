@@ -455,6 +455,27 @@ button.danger:hover:not(:disabled) {
   font-size: 0.9rem;
 }
 
+.failure-cell {
+  max-width: 26rem;
+}
+
+.failure-cell strong {
+  display: block;
+  font-weight: 500;
+  color: #ffc9c9;
+}
+
+.failure-cell span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.failure-cell .failure-none {
+  color: var(--text-muted);
+}
+
 .meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));

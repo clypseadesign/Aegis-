@@ -78,6 +78,10 @@ class ExecutionResponse(BaseModel):
     result: ExecutionResult
     started_at: datetime | None
     completed_at: datetime | None
+    # Why the execution failed, when it did. Without this the UI could only
+    # report "failed", which is indistinguishable between a misconfigured
+    # target, a bad credential, and a provider outage.
+    error: str | None = None
     created_by: UUID | None
     created_at: datetime
     updated_at: datetime
