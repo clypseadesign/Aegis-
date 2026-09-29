@@ -14,6 +14,24 @@ const PROVIDERS: Array<{ value: TargetProvider; label: string; needsModel: boole
 /** Redacted placeholder shown wherever a secret value would otherwise appear. */
 export const REDACTED = '••••••••'
 
+/**
+ * A worked endpoint example per provider.
+ *
+ * The endpoint is a base URL and AegisAI appends the request path, which is
+ * the most common misconfiguration: pasting the full completion URL produces a
+ * doubled path and an HTTP 404 that is hard to diagnose from the UI.
+ */
+function endpointExample(provider: TargetProvider): string {
+  switch (provider) {
+    case 'openai_compatible':
+      return 'AegisAI adds /chat/completions. e.g. https://api.openrouter.ai/api/v1'
+    case 'ollama':
+      return 'AegisAI adds /api/chat. e.g. http://host.docker.internal:11434'
+    default:
+      return 'Full URL of your inference endpoint'
+  }
+}
+
 export function TargetsPage() {
   const [targets, setTargets] = useState<Target[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -166,14 +184,14 @@ export function TargetsPage() {
           <Field
             label="Endpoint"
             htmlFor="target-endpoint"
-            hint="Absolute http or https URL. Loopback and private addresses are blocked."
+            hint={`Base URL only — AegisAI appends the path. ${endpointExample(provider)}`}
           >
             <input
               id="target-endpoint"
               name="endpoint"
               type="url"
               required
-              placeholder="https://api.example.com/v1"
+              placeholder={endpointExample(provider)}
               value={endpoint}
               onChange={(e) => setEndpoint(e.target.value)}
             />

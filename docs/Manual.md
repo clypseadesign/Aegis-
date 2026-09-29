@@ -168,6 +168,13 @@ anything.
 | Endpoint | e.g. `https://api.openai.com/v1` |
 | Model | e.g. `gpt-4o-mini` (required for OpenAI-compatible and Ollama) |
 
+> **The endpoint is the BASE URL only.** AegisAI appends the request path itself, so
+> entering the full completion URL produces a doubled path and an HTTP 404 that is hard to
+> diagnose. Enter `https://api.openrouter.ai/api/v1`, **not**
+> `https://api.openrouter.ai/api/v1/chat/completions`. The backend now rejects an endpoint
+> that already contains a request path, and the form shows the exact path each provider
+> appends.
+
 **Do not put the API key in the endpoint URL** — the backend rejects credentials in URLs.
 
 #### Testing a model on your own machine

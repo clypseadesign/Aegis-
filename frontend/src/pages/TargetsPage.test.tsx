@@ -94,6 +94,30 @@ describe('Target creation authorization attestation', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows a per-provider endpoint example and updates it when the provider changes', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    const endpoint = await screen.findByLabelText('Endpoint')
+
+    // Default provider is openai_compatible.
+    expect(endpoint).toHaveAttribute(
+      'placeholder',
+      'AegisAI adds /chat/completions. e.g. https://api.openrouter.ai/api/v1',
+    )
+    expect(
+      screen.getByText(/AegisAI adds \/chat\/completions/),
+    ).toBeInTheDocument()
+
+    // Switching to Ollama must change the guidance to the Ollama path.
+    await user.selectOptions(await screen.findByLabelText('Provider'), 'ollama')
+    expect(endpoint).toHaveAttribute(
+      'placeholder',
+      'AegisAI adds /api/chat. e.g. http://host.docker.internal:11434',
+    )
+    expect(screen.getByText(/AegisAI adds \/api\/chat/)).toBeInTheDocument()
+  })
+
   it('sends authorization_attestation: true when the target is created', async () => {
     const user = userEvent.setup()
     renderPage()

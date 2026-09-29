@@ -9,6 +9,43 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.target import TargetProvider, TargetStatus
 
+# Path segments that are request paths, never part of a base URL.
+#
+# The endpoint is a BASE URL: AegisAI appends the provider's own path, so a
+# value that already contains one of these produces a doubled path and an
+# opaque HTTP 404 at run time (for example
+# https://api.openrouter.ai/api/v1/chat/completions/api/chat). This is the
+# single most common configuration mistake, so it is rejected up front.
+#
+# All known request paths are rejected for every fixed-path provider, not just
+# the selected one. A user who pasted a hosted OpenAI-compatible URL but chose
+# "Ollama" is mismatched in both ways, and checking only the chosen provider's
+# suffix would miss it.
+#
+# CUSTOM_REST is excluded because its path is configurable and defaults to
+# none, so the full URL is legitimate there.
+PROVIDER_REQUEST_PATHS: tuple[str, ...] = (
+    "/chat/completions",
+    "/api/chat",
+)
+
+
+def _validate_endpoint_is_base_url(endpoint: str, provider: TargetProvider) -> None:
+    """Reject an endpoint that already contains a provider request path."""
+
+    if provider == TargetProvider.CUSTOM_REST:
+        return
+
+    path = urlsplit(endpoint).path.rstrip("/").lower()
+    for request_path in PROVIDER_REQUEST_PATHS:
+        if path.endswith(request_path) or request_path in path:
+            raise ValueError(
+                "endpoint must be the base URL, not the full request path. "
+                f"AegisAI appends the request path itself, so enter the URL up "
+                f"to but not including '{request_path}' (for example "
+                "https://api.example.com/v1)."
+            )
+
 
 class TargetCreate(BaseModel):
     """Request schema for creating a project target."""
@@ -66,6 +103,7 @@ class TargetCreate(BaseModel):
             and not self.model
         ):
             raise ValueError("model is required for openai_compatible and ollama targets")
+        _validate_endpoint_is_base_url(self.endpoint, self.provider)
         return self
 
 
@@ -116,6 +154,22 @@ class TargetUpdate(BaseModel):
 
         if not self.model_fields_set:
             raise ValueError("at least one target field must be supplied")
+        return self
+
+    @model_validator(mode="after")
+    def validate_endpoint_against_provider(self) -> "TargetUpdate":
+        """Apply the base-URL rule when the provider is known.
+
+        A partial update may supply only the endpoint or only the provider, so
+        the check runs when the endpoint is present and the provider is either
+        supplied now or unchanged. Without the provider the pairing cannot be
+        determined, so the value is left to the create path or a later update.
+        """
+
+        if self.endpoint is None:
+            return self
+        if self.provider is not None:
+            _validate_endpoint_is_base_url(self.endpoint, self.provider)
         return self
 
 
