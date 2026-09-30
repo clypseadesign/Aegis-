@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.api.errors import ProjectNotFoundError
 from app.db.session import get_db_session
 from app.models.execution import ExecutionStatus
-from app.models.report import Report
 from app.schemas import (
     EvidenceCreate,
     EvidenceResponse,
@@ -48,6 +47,7 @@ from app.services.assessments import (
     update_finding,
     update_security_test,
 )
+from app.services.audit import record_audit_event
 from app.services.execution_engine import (
     cancel_execution,
     start_execution,
@@ -56,6 +56,7 @@ from app.services.report_generation import (
     compare_reports,
     generate_report,
     get_report_download_path,
+    require_project_report,
 )
 from app.services.seed_tests import seed_project_tests
 
@@ -340,12 +341,17 @@ async def generate_report_endpoint(
 ) -> ReportResponse:
     """Generate (or regenerate) a report artifact and return its updated record."""
 
-    report = session.get(Report, report_id)
-    if report is None or report.project_id != project_id:
-        raise ProjectNotFoundError()
-
+    report = require_project_report(session, current_user, project_id, report_id)
     generate_report(session, report)
     session.refresh(report)
+    record_audit_event(
+        session,
+        actor_id=current_user.id,
+        action="report.generated",
+        resource_type="report",
+        resource_id=str(report.id),
+        event_metadata={"project_id": str(project_id), "format": report.format},
+    )
     return ReportResponse.model_validate(report)
 
 
@@ -369,11 +375,29 @@ async def download_report_endpoint(
     current_user: CurrentUser,
     session: DatabaseSession,
 ) -> FileResponse:
-    """Download a generated report artifact."""
+    """Download a generated report artifact.
 
+    Report artifacts contain the full evidence set, so the response is marked
+    no-store to keep them out of shared and browser caches.
+    """
+
+    require_project_report(session, current_user, project_id, report_id)
     path = get_report_download_path(session, report_id, project_id)
+    record_audit_event(
+        session,
+        actor_id=current_user.id,
+        action="report.downloaded",
+        resource_type="report",
+        resource_id=str(report_id),
+        event_metadata={"project_id": str(project_id)},
+    )
     media_type = "application/json" if path.suffix == ".json" else "text/markdown"
-    return FileResponse(path=str(path), media_type=media_type, filename=path.name)
+    return FileResponse(
+        path=str(path),
+        media_type=media_type,
+        filename=path.name,
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.get(
@@ -389,6 +413,21 @@ async def compare_reports_endpoint(
 ) -> ReportComparisonResponse:
     """Compare two report runs and return new/resolved/regressed findings."""
 
+    # Both reports must be authorized against the same project, otherwise a
+    # caller could compare their own report against another tenant's.
+    require_project_report(session, current_user, project_id, report_a_id)
+    require_project_report(session, current_user, project_id, report_b_id)
+    record_audit_event(
+        session,
+        actor_id=current_user.id,
+        action="report.compared",
+        resource_type="report",
+        resource_id=str(report_a_id),
+        event_metadata={
+            "project_id": str(project_id),
+            "other_report_id": str(report_b_id),
+        },
+    )
     return ReportComparisonResponse.model_validate(
         compare_reports(session, report_a_id, report_b_id, project_id)
     )

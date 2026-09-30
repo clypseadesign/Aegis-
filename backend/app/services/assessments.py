@@ -11,6 +11,7 @@ from app.models.execution import Execution, ExecutionStatus
 from app.models.finding import Finding, FindingStatus
 from app.models.project import Project
 from app.models.report import Report
+from app.models.target import Target
 from app.models.test import SecurityTest
 from app.models.user import User
 from app.schemas import (
@@ -34,6 +35,28 @@ def _require_project(session: Session, user: User, project_id: UUID) -> Project:
         raise ProjectNotFoundError()
     ensure_project_access(session, user, project, "read")
     return project
+
+
+def _require_project_test(session: Session, project_id: UUID, test_id: UUID) -> None:
+    """Ensure a security test belongs to the given project."""
+
+    test = session.get(SecurityTest, test_id)
+    if test is None or test.project_id != project_id:
+        raise AssessmentNotFoundError()
+
+
+def _require_project_target(session: Session, project_id: UUID, target_id: UUID) -> None:
+    """Ensure a target belongs to the given project.
+
+    Targets are a separate resource from projects, so an execution can name one
+    that lives in a different project. Without this check the execution engine
+    would resolve that target's stored credentials and send attacker-chosen
+    prompts to another tenant's model endpoint.
+    """
+
+    target = session.get(Target, target_id)
+    if target is None or target.project_id != project_id:
+        raise AssessmentNotFoundError()
 
 
 def create_security_test(
@@ -122,9 +145,9 @@ def create_execution(
 ) -> Execution:
     _require_project(session, user, project_id)
     if payload.test_id is not None:
-        test = session.get(SecurityTest, payload.test_id)
-        if test is None or test.project_id != project_id:
-            raise AssessmentNotFoundError()
+        _require_project_test(session, project_id, payload.test_id)
+    if payload.target_id is not None:
+        _require_project_target(session, project_id, payload.target_id)
     execution = Execution(
         project_id=project_id,
         test_id=payload.test_id,

@@ -15,12 +15,15 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.errors import ProjectNotFoundError
 from app.models.evidence import Evidence
 from app.models.execution import Execution
 from app.models.finding import Finding, FindingSeverity
 from app.models.project import Project
 from app.models.report import Report
 from app.models.test import SecurityTest
+from app.models.user import User
+from app.services.projects import ensure_project_access
 from app.services.risk_scoring import (
     compute_risk_level,
     compute_risk_score,
@@ -260,6 +263,32 @@ def _write_markdown_report(filepath: Path, data: dict) -> None:
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
+
+
+def require_project_report(
+    session: Session,
+    user: User,
+    project_id: UUID,
+    report_id: UUID,
+) -> Report:
+    """Authorize access to a single report and return it.
+
+    Reports carry the full evidence set for an assessment, so every report
+    route must confirm both that the report belongs to the given project and
+    that the *caller* has access to that project. Checking only the path
+    parameter would let anyone holding a project_id and report_id read another
+    tenant's prompts and responses.
+    """
+
+    report = session.get(Report, report_id)
+    if report is None or report.project_id != project_id:
+        raise ProjectNotFoundError()
+
+    project = session.get(Project, project_id)
+    if project is None:
+        raise ProjectNotFoundError()
+    ensure_project_access(session, user, project, "read")
+    return report
 
 
 def get_report_download_path(

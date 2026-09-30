@@ -46,6 +46,8 @@ Thumbs.db
 *.sqlite3
 tmp/
 temp/
+# Stray editor/agent temp files at the repo root (e.g. tmpgvwzzssn).
+tmp????????
 
 # Docker
 docker-data/
