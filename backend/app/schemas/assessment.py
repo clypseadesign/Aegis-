@@ -61,10 +61,16 @@ class ExecutionCreate(BaseModel):
 
 
 class ExecutionUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    """Request schema for updating an execution.
 
-    status: ExecutionStatus | None = None
-    result: ExecutionResult | None = None
+    Deliberately carries no fields. Execution status and result are owned by
+    the execution engine: they are the assessment's verdict, and a client that
+    could set them could mark a failed run as ``succeeded``/``pass`` and hide a
+    real finding. Transitions happen only through run, cancel, and the engine
+    itself.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ExecutionResponse(BaseModel):

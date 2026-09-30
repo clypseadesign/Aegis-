@@ -48,6 +48,23 @@ def can_mutate_project(user: User, project: Project) -> bool:
     return user.role != UserRole.VIEWER and can_read_project(user, project)
 
 
+# Operations that change state and therefore require mutation rights, not
+# merely read access. Named explicitly so a call site cannot silently pass a
+# verb that happens not to be in this set: a mutation that used "read" would be
+# allowed for a VIEWER.
+MUTATING_OPERATIONS = frozenset(
+    {
+        "create",
+        "update",
+        "delete",
+        "run",
+        "cancel",
+        "seed",
+        "generate",
+    }
+)
+
+
 def ensure_project_access(
     session: Session,
     user: User,
@@ -69,7 +86,7 @@ def ensure_project_access(
         )
         raise PermissionDeniedError()
 
-    if operation in {"update", "delete"} and not can_mutate_project(user, project):
+    if operation in MUTATING_OPERATIONS and not can_mutate_project(user, project):
         record_audit_event(
             session,
             actor_id=user.id,

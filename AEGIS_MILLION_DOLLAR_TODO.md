@@ -179,21 +179,32 @@ These capabilities were identified as already present in the audit. They should 
 
 ## 1.3 Enforce mutation authorization
 
-- [ ] Separate project read access from project mutation access for security-test creation.
-- [ ] Separate project read access from project mutation access for security-test updates/deletes.
-- [ ] Separate project read access from execution creation.
-- [ ] Make execution lifecycle transitions engine-owned.
+- [x] Separate project read access from project mutation access for security-test creation.
+  - **Done:** `create_security_test()` now calls `_require_project_write()`.
+- [x] Separate project read access from project mutation access for security-test updates/deletes.
+  - **Done:** `update_security_test()` and `delete_security_test()` enforce write access after resolving the test.
+- [x] Separate project read access from execution creation.
+  - **Done:** `create_execution()` now calls `_require_project_write()`.
+- [x] Make execution lifecycle transitions engine-owned.
   - **Acceptance:** Public API cannot arbitrarily change a running execution to `succeeded`, `failed`, or `pass`.
-
-- [ ] Restrict execution cancellation to authorized project operators.
-- [ ] Restrict finding creation/update to the execution engine and authorized triage roles.
-- [ ] Restrict evidence creation to the execution engine or explicit evidence-management roles.
-- [ ] Restrict report creation/generation to project operators.
+  - **Done — most severe defect in this audit.** `ExecutionUpdate` exposed `status` and `result`, and `update_execution()` authorized only through the read path. Any project member, including a VIEWER, could rewrite an assessment outcome — marking a failed run as `succeeded`/`pass` and erasing a real finding. The fields are removed from the schema, `update_execution()` and the `PATCH /executions/{id}` route are deleted, and transitions now happen only via run, cancel, and the engine. The frontend never used that endpoint, so no client change was needed.
+- [x] Restrict execution cancellation to authorized project operators.
+  - **Done:** cancellation resolves the execution through the read path and then requires write access.
+- [x] Restrict finding creation/update to the execution engine and authorized triage roles.
+  - **Done:** `create_finding()` and `update_finding()` require write access.
+- [x] Restrict evidence creation to the execution engine or explicit evidence-management roles.
+  - **Done:** `create_evidence()` requires write access explicitly rather than relying on the `update_finding()` call it makes internally.
+- [x] Restrict report creation/generation to project operators.
+  - **Done:** `create_report()` requires write access; generation, download, and comparison require read access via `require_project_report()`.
 - [ ] Add a complete project resource authorization matrix.
   - **Roles:** owner, project admin, analyst, reviewer, viewer, support operator.
   - **Resources:** targets, credentials, tests, executions, findings, evidence, reports, memberships.
-
+  - **Blocked:** The codebase has four roles (`super_admin`, `admin`, `user`, `viewer`). `analyst`, `reviewer`, and `support operator` do not exist, so this needs a role-model change first.
 - [ ] Add API tests for every resource/action/role combination.
+  - **Acceptance:** Every unauthorized operation returns the expected safe status and creates an audit event.
+  - **Partial:** `tests/services/test_mutation_authorization.py` (9 tests) covers owner and viewer across tests, executions, findings, evidence, and reports, plus lifecycle integrity. Full role coverage is blocked on the matrix above.
+
+**Mechanism note.** The root cause was that `ensure_project_access()` only enforced `can_mutate_project()` (which excludes VIEWER) when the operation string was literally `"update"` or `"delete"`. Every mutation that passed `"read"` was silently permitted for a VIEWER. `MUTATING_OPERATIONS` is now an explicit named set, and `_require_project_write()` makes each mutation declare itself as one.
   - **Acceptance:** Every unauthorized operation returns the expected safe status and creates an audit event.
 
 ## 1.4 Make membership authorization consistent

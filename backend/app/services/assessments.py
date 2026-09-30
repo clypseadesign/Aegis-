@@ -17,7 +17,6 @@ from app.models.user import User
 from app.schemas import (
     EvidenceCreate,
     ExecutionCreate,
-    ExecutionUpdate,
     FindingCreate,
     FindingUpdate,
     ReportCreate,
@@ -30,10 +29,27 @@ from app.services.severity_scorer import compute_automatic_severity
 
 
 def _require_project(session: Session, user: User, project_id: UUID) -> Project:
+    """Authorize read access to a project."""
+
     project = session.get(Project, project_id)
     if project is None:
         raise ProjectNotFoundError()
     ensure_project_access(session, user, project, "read")
+    return project
+
+
+def _require_project_write(session: Session, user: User, project_id: UUID) -> Project:
+    """Authorize a state-changing operation on a project.
+
+    Read access is not sufficient: a VIEWER must not create tests, executions,
+    findings, evidence, or reports, nor modify or delete them. Naming the
+    operation keeps the mutation explicit at each call site.
+    """
+
+    project = session.get(Project, project_id)
+    if project is None:
+        raise ProjectNotFoundError()
+    ensure_project_access(session, user, project, "update")
     return project
 
 
@@ -65,7 +81,7 @@ def create_security_test(
     payload: SecurityTestCreate,
     user: User,
 ) -> SecurityTest:
-    _require_project(session, user, project_id)
+    _require_project_write(session, user, project_id)
     test = SecurityTest(
         project_id=project_id,
         name=payload.name,
@@ -114,6 +130,7 @@ def update_security_test(
     user: User,
 ) -> SecurityTest:
     test = get_security_test(session, test_id, user)
+    _require_project_write(session, user, test.project_id)
     changes = payload.model_dump(exclude_unset=True)
     for field, value in changes.items():
         setattr(test, field, value)
@@ -124,6 +141,7 @@ def update_security_test(
 
 def delete_security_test(session: Session, test_id: UUID, user: User) -> bool:
     test = get_security_test(session, test_id, user)
+    _require_project_write(session, user, test.project_id)
     session.delete(test)
     session.commit()
     record_audit_event(
@@ -143,7 +161,7 @@ def create_execution(
     payload: ExecutionCreate,
     user: User,
 ) -> Execution:
-    _require_project(session, user, project_id)
+    _require_project_write(session, user, project_id)
     if payload.test_id is not None:
         _require_project_test(session, project_id, payload.test_id)
     if payload.target_id is not None:
@@ -188,24 +206,9 @@ def list_executions(session: Session, project_id: UUID, user: User) -> list[Exec
     )
 
 
-def update_execution(
-    session: Session,
-    execution_id: UUID,
-    payload: ExecutionUpdate,
-    user: User,
-) -> Execution:
-    execution = get_execution(session, execution_id, user)
-    if payload.status is not None:
-        execution.status = payload.status
-    if payload.result is not None:
-        execution.result = payload.result
-    session.commit()
-    session.refresh(execution)
-    return execution
-
-
 def create_finding(session: Session, payload: FindingCreate, user: User) -> Finding:
     execution = get_execution(session, payload.execution_id, user)
+    _require_project_write(session, user, execution.project_id)
     finding = Finding(
         execution_id=execution.id,
         title=payload.title,
@@ -240,7 +243,8 @@ def update_finding(
     finding = session.get(Finding, finding_id)
     if finding is None:
         raise AssessmentNotFoundError()
-    get_execution(session, finding.execution_id, user)
+    execution = get_execution(session, finding.execution_id, user)
+    _require_project_write(session, user, execution.project_id)
     changes = payload.model_dump(exclude_unset=True)
     for field, value in changes.items():
         setattr(finding, field, value)
@@ -250,6 +254,11 @@ def update_finding(
 
 
 def create_evidence(session: Session, payload: EvidenceCreate, user: User) -> Evidence:
+    finding = session.get(Finding, payload.finding_id)
+    if finding is None:
+        raise AssessmentNotFoundError()
+    execution = get_execution(session, finding.execution_id, user)
+    _require_project_write(session, user, execution.project_id)
     update_finding(
         session,
         payload.finding_id,
@@ -286,7 +295,7 @@ def create_report(
     payload: ReportCreate,
     user: User,
 ) -> Report:
-    _require_project(session, user, project_id)
+    _require_project_write(session, user, project_id)
     report = Report(
         project_id=project_id,
         title=payload.title,

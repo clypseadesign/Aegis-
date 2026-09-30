@@ -30,16 +30,17 @@ from app.services.assessments import (
     create_finding,
     create_report,
     create_security_test,
+    get_execution,
     list_executions,
     list_findings,
     list_security_tests,
-    update_execution,
     update_finding,
     update_security_test,
 )
 from app.services.auth import register_user
 from app.services.memberships import create_project_membership
 from app.services.projects import create_project
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -146,7 +147,13 @@ def test_member_can_read_project_tests() -> None:
         session.close()
 
 
-def test_execution_creation_and_status_update() -> None:
+def test_execution_lifecycle_cannot_be_set_by_a_caller() -> None:
+    """Status and result are engine-owned and must not be caller-settable.
+
+    A caller that could write them could mark a failed run as succeeded/pass
+    and hide a real finding, so the public update surface is empty.
+    """
+
     session = _session()
     owner = _register_user(session)
     project = _create_project(session, owner)
@@ -155,18 +162,16 @@ def test_execution_creation_and_status_update() -> None:
     try:
         execution = create_execution(session, project.id, ExecutionCreate(test_id=test.id), owner)
         assert execution.status == ExecutionStatus.PENDING
-        running = update_execution(
-            session,
-            execution.id,
-            ExecutionUpdate(status=ExecutionStatus.RUNNING),
-            owner,
-        )
-        assert running.status == ExecutionStatus.RUNNING
+
+        # The update schema accepts no fields, so there is nothing to write.
+        assert ExecutionUpdate().model_dump(exclude_unset=True) == {}
+
+        # Passing a lifecycle field is rejected outright.
+        with pytest.raises(ValidationError):
+            ExecutionUpdate.model_validate({"status": "running"})
 
         with pytest.raises(AssessmentNotFoundError):
-            update_execution(
-                session, uuid4(), ExecutionUpdate(status=ExecutionStatus.RUNNING), owner
-            )
+            get_execution(session, uuid4(), owner)
     finally:
         session.delete(project)
         session.commit()

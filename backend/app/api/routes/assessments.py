@@ -15,7 +15,6 @@ from app.schemas import (
     EvidenceResponse,
     ExecutionCreate,
     ExecutionResponse,
-    ExecutionUpdate,
     FindingCreate,
     FindingResponse,
     FindingUpdate,
@@ -43,7 +42,6 @@ from app.services.assessments import (
     list_findings,
     list_reports,
     list_security_tests,
-    update_execution,
     update_finding,
     update_security_test,
 )
@@ -185,20 +183,6 @@ async def get_execution_endpoint(
         raise ProjectNotFoundError()
 
     return ExecutionResponse.model_validate(execution)
-
-
-@router.patch("/executions/{execution_id}", response_model=ExecutionResponse)
-async def update_execution_endpoint(
-    project_id: UUID,
-    execution_id: UUID,
-    payload: ExecutionUpdate,
-    current_user: CurrentUser,
-    session: DatabaseSession,
-) -> ExecutionResponse:
-    _ = get_execution(session, execution_id, current_user)
-    return ExecutionResponse.model_validate(
-        update_execution(session, execution_id, payload, current_user)
-    )
 
 
 @router.post(
