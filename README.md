@@ -91,7 +91,8 @@ Full setup details are in [`docs/development.md`](docs/development.md) and [`doc
 
 | Document | Contents |
 |---|---|
-| **[`docs/Manual.md`](docs/Manual.md)** | **Complete user manual — start here** |
+| **[`docs/OVERVIEW.md`](docs/OVERVIEW.md)** | **What this project is, its history, architecture, and honest limitations — read this first** |
+| [`docs/Manual.md`](docs/Manual.md) | Complete user manual |
 | [`docs/Beginner-Guide.md`](docs/Beginner-Guide.md) | Condensed quick start |
 | [`docs/development.md`](docs/development.md) | Local setup, quality gates, running tests |
 | [`docs/deployment.md`](docs/deployment.md) | VPS deployment, TLS, operations, troubleshooting |
