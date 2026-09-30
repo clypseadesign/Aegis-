@@ -245,12 +245,28 @@ These capabilities were identified as already present in the audit. They should 
 
 ## 1.7 Correct frontend target selection
 
-- [ ] Initialize the selected target from the filtered targets belonging to the current project.
+- [x] Initialize the selected target from the filtered targets belonging to the current project.
   - **File:** `frontend/src/pages/ProjectDetailPage.tsx`.
-- [ ] Clear a selected target when the project changes and it is no longer valid.
-- [ ] Disable execution controls until the selected target is confirmed project-scoped.
-- [ ] Add a frontend regression test where the first global target belongs to another project.
-- [ ] Keep backend validation authoritative regardless of UI behavior.
+  - **Done:** The selection was seeded from `targetList[0]` — the *unfiltered* result of
+    `GET /targets`, which returns every target the user can see. The dropdown options were
+    built from the filtered list, so when another project's target came first the select's
+    value matched no visible option and the run submitted a target the user could not see
+    being used. This was observed in practice: the UI showed one target while executions ran
+    against another. Now seeded from `projectTargets`, falling back to the first project
+    target when the current selection is not in scope.
+- [x] Clear a selected target when the project changes and it is no longer valid.
+  - **Done:** the same selection logic re-evaluates on every load, replacing an
+    out-of-scope id rather than keeping it.
+- [x] Disable execution controls until the selected target is confirmed project-scoped.
+  - **Done:** `Run test` is gated on `targetIsProjectScoped`, with an inline explanation
+    when the project has no targets or the selection is out of scope.
+- [x] Add a frontend regression test where the first global target belongs to another project.
+  - **Done:** `tests/.../ProjectDetailPage.test.tsx` gains two cases — a foreign target
+    listed first must not be selected or offered, and a project with no targets disables
+    the run control with an explanation.
+- [x] Keep backend validation authoritative regardless of UI behavior.
+  - **Done:** Section 1.1 rejects any execution whose `target_id` is outside the project at
+    the service layer, so this UI fix is a usability correction, not the control itself.
 
 ## 1.8 Protect raw evidence and reports
 

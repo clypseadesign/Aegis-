@@ -476,6 +476,13 @@ button.danger:hover:not(:disabled) {
   color: var(--text-muted);
 }
 
+.inline-warning {
+  margin: 0;
+  align-self: center;
+  font-size: 0.82rem;
+  color: var(--warning);
+}
+
 .meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));

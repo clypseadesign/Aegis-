@@ -70,11 +70,19 @@ export function ProjectDetailPage() {
         ])
       setProject(projectDetail)
       setTests(testList)
-      setTargets(targetList.filter((target) => target.project_id === id))
+      const projectTargets = targetList.filter((target) => target.project_id === id)
+      setTargets(projectTargets)
       setExecutions(executionList)
       setReports(reportList)
       setSelectedTestId((current) => current || testList[0]?.id || '')
-      setSelectedTargetId((current) => current || targetList[0]?.id || '')
+      // Seed the target selection from this project's targets only. Using the
+      // unfiltered list here selected another project's target, which the
+      // dropdown then could not display and the run silently submitted.
+      setSelectedTargetId((current) =>
+        projectTargets.some((target) => target.id === current)
+          ? current
+          : (projectTargets[0]?.id ?? ''),
+      )
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load project.')
     } finally {
@@ -224,6 +232,12 @@ export function ProjectDetailPage() {
   if (!project) return <EmptyState>Project not found.</EmptyState>
 
   const projectTargets = targets
+  // The run controls stay disabled unless the selected target is confirmed to
+  // belong to this project. Backend validation remains authoritative; this only
+  // prevents submitting a selection the UI cannot legitimately offer.
+  const targetIsProjectScoped = projectTargets.some(
+    (target) => target.id === selectedTargetId,
+  )
 
   return (
     <section>
@@ -292,10 +306,17 @@ export function ProjectDetailPage() {
             <button
               type="button"
               onClick={() => void handleRun()}
-              disabled={selectedTestId === '' || selectedTargetId === ''}
+              disabled={selectedTestId === '' || !targetIsProjectScoped}
             >
               Run test
             </button>
+            {!targetIsProjectScoped && (
+              <p className="inline-warning" role="status">
+                {projectTargets.length === 0
+                  ? 'Add a target to this project before running a test.'
+                  : 'Select a target that belongs to this project.'}
+              </p>
+            )}
           </div>
         )}
       </div>

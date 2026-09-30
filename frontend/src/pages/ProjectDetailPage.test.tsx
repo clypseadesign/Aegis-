@@ -304,3 +304,94 @@ describe('Execution polling', () => {
     expect(after).toBe(afterLoad)
   })
 })
+
+describe('Target selection is project-scoped', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /**
+   * The regression: /api/v1/targets returns every target the user can see, so
+   * the first entry may belong to a different project. Selecting it meant the
+   * dropdown showed this project's targets but the run submitted a foreign
+   * target id, which the user could not see being used.
+   */
+  it('ignores a foreign target that appears first in the global list', async () => {
+    const foreignTarget = {
+      ...TARGET,
+      id: 'foreign',
+      project_id: 'other-project',
+      name: 'Other project target',
+    }
+    const ownTarget = { ...TARGET, id: 'own', name: 'This project target' }
+
+    vi.stubGlobal(
+      'fetch',
+      router({
+        ...baseRoutes,
+        // Foreign target deliberately first, as the global endpoint returns it.
+        '/targets': { body: [foreignTarget, ownTarget] },
+        '/assessments/tests': {
+          body: [
+            {
+              id: 'st1',
+              project_id: 'p1',
+              name: 'A test',
+              description: null,
+              provider: 'ollama',
+              required_capabilities: [],
+              config: { category: 'jailbreak', grading: {} },
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+        },
+      }),
+    )
+
+    renderPage()
+
+    const select = (await screen.findByLabelText('Target')) as HTMLSelectElement
+    // Only this project's targets are offered.
+    const options = Array.from(select.options).map((option) => option.value)
+    expect(options).toEqual(['own'])
+    // And the selection is the project-scoped one, not the foreign id.
+    expect(select.value).toBe('own')
+  })
+
+  it('disables Run test and explains when the project has no targets', async () => {
+    vi.stubGlobal(
+      'fetch',
+      router({
+        ...baseRoutes,
+        '/targets': { body: [] },
+        '/assessments/tests': {
+          body: [
+            {
+              id: 'st1',
+              project_id: 'p1',
+              name: 'A test',
+              description: null,
+              provider: 'ollama',
+              required_capabilities: [],
+              config: { category: 'jailbreak', grading: {} },
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+        },
+      }),
+    )
+
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: 'Run test' })).toBeDisabled()
+    expect(
+      await screen.findByText(/Add a target to this project/i),
+    ).toBeInTheDocument()
+  })
+})
