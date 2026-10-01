@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -60,6 +60,24 @@ class User(Base):
         nullable=False,
         default=True,
         server_default="true",
+    )
+
+    # Session revocation marker.
+    #
+    # Access tokens are stateless JWTs, so without this they stay valid until
+    # they expire. Each token carries the session version it was minted with;
+    # signing out increments this counter, and any token minted under an older
+    # version is rejected immediately.
+    #
+    # A monotonic counter rather than a timestamp cut-off on purpose: JWT `iat`
+    # has only second granularity, so any timestamp comparison has an ambiguous
+    # same-second case where either sign-out silently fails or a fresh sign-in is
+    # wrongly rejected. Counting is exact.
+    session_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
     )
 
     created_at: Mapped[datetime] = mapped_column(

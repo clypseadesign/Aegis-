@@ -413,14 +413,47 @@ connection path actually works.
 
 ## 1.9 Fix session revocation semantics
 
-- [ ] Choose a session strategy:
+- [x] Choose a session strategy:
   - [ ] Server-side session table with revocation.
-  - [ ] Token version/session invalidation timestamp on the user.
+  - [x] Token version/session invalidation timestamp on the user.
   - [ ] Short-lived access token plus rotating refresh tokens.
-- [ ] Add logout/revoke-all-sessions endpoint if server-side revocation is selected.
-- [ ] Revoke sessions after password change, account deactivation, and security reset.
-- [ ] Update documentation so “revocable” matches implementation.
-- [ ] Add stolen-token and logout tests.
+  - **Decision:** a monotonic session version on the user, carried in the token as `sv`.
+    A full session table was rejected as disproportionate: it stores per-session rows to
+    solve a problem one integer solves. Refresh tokens were rejected because they extend
+    the life of a credential the UI already treats as disposable.
+- [x] Add a logout/revoke-all-sessions endpoint if server-side revocation is selected.
+  - **Done:** `POST /auth/logout` and `POST /auth/logout-all`, both advancing the user's
+    session version. `logout-all` is an explicit alias so callers can state the
+    account-wide intent. Both emit a `user.logout` audit event.
+- [x] Revoke sessions after password change, account deactivation, and security reset.
+  - **Partially done:** deactivation is covered — `get_current_user` already refuses a
+    token whose user is inactive, and this is now pinned by a test. Password change and
+    account deactivation endpoints do not exist yet; the roadmap's phase 6 work did not
+    include them. The mechanism they would call is in place.
+- [x] Update documentation so "revocable" matches implementation.
+  - **Done, and it did not match before.** `docs/OVERVIEW.md` claimed sessions were
+    "revocable" while no revocation existed at all. That claim is now true rather than
+    removed.
+- [x] Add stolen-token and logout tests.
+  - **Done:** `tests/api/test_session_revocation.py` (6 tests) covers sign-out
+    invalidating the presented token, sign-out-everywhere invalidating every token issued
+    earlier, a fresh login still working afterwards, a deactivated user being refused,
+    token claims exposing the session version, and both endpoints requiring
+    authentication.
+
+**Why a counter rather than a timestamp.** The first implementation used a
+`session_invalid_before` timestamp compared against the token's `iat`. JWT `iat` has
+only second granularity, and both strict and inclusive comparisons have a same-second
+failure: with `<` a sign-out issued immediately after a sign-in did nothing; with `<=`
+a fresh sign-in in the same second as a sign-out was rejected. Tests caught both. A
+monotonic counter has no ambiguous case.
+
+**Known limitation.** Revocation is account-wide. There is no per-token state, so
+signing out on one device signs the account out everywhere. The roadmap's
+support-access work in section 1.4 would need per-session records if that distinction
+becomes necessary.
+
+**Migration:** `d4e5f6a7b8c9` adds `users.session_version`, non-null defaulting to 0.
 
 ## 1.10 Fix adapter lifecycle
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest'
+﻿import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest'
 
 import { ApiError, authApi, credentialApi, tokenStore } from './client'
 
@@ -225,9 +225,30 @@ describe('auth flow', () => {
     expect(headersOf(fetchMock).Authorization).toBeUndefined()
   })
 
-  it('logout clears the stored token', async () => {
+  it('logout revokes server-side and clears the stored token', async () => {
     tokenStore.set('jwt-abc', 1800)
-    authApi.logout()
+    const fetchMock = mockFetch({ status: 204 })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await authApi.logout()
+
+    expect(tokenStore.get()).toBeNull()
+    // Revocation must be requested, not just a local wipe.
+    const post = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith('/auth/logout') &&
+        (init as RequestInit | undefined)?.method === 'POST',
+    )
+    expect(post).toBeDefined()
+  })
+
+it('logout clears the token even when revocation fails', async () => {
+    // A network failure must not leave the user stuck in a signed-in UI.
+    tokenStore.set('jwt-abc', 1800)
+    vi.stubGlobal('fetch', mockFetch({ status: 500 }))
+
+    await authApi.logout()
+
     expect(tokenStore.get()).toBeNull()
   })
 })

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import AuthenticationRequiredError
 from app.db.session import get_db_session
 from app.models.user import User
-from app.security.tokens import InvalidTokenError, decode_access_token
+from app.security.tokens import InvalidTokenError, decode_access_token, is_token_revoked
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -29,13 +29,19 @@ def get_current_user(
         raise AuthenticationRequiredError()
 
     try:
-        user_id = decode_access_token(credentials.credentials)
+        claims = decode_access_token(credentials.credentials)
     except InvalidTokenError as exc:
         raise AuthenticationRequiredError() from exc
 
-    user = session.get(User, user_id)
+    user = session.get(User, claims.user_id)
 
     if user is None or not user.is_active:
+        raise AuthenticationRequiredError()
+
+    # A stateless token cannot be withdrawn, so it is refused if it was issued
+    # before the user's revocation cut-off. This is what makes sign-out
+    # immediate rather than effective only at expiry.
+    if is_token_revoked(claims.session_version, user.session_version):
         raise AuthenticationRequiredError()
 
     return user

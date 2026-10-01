@@ -7,8 +7,9 @@ export function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  function handleLogout() {
-    logout()
+  async function handleLogout() {
+    // Revoke server-side first so the token cannot be reused, then navigate.
+    await logout()
     navigate('/login', { replace: true })
   }
 
@@ -29,7 +30,7 @@ export function Layout() {
 
         <div className="user-menu">
           <span className="user-email">{user?.email}</span>
-          <button type="button" onClick={handleLogout}>
+          <button type="button" onClick={() => void handleLogout()}>
             Sign out
           </button>
         </div>

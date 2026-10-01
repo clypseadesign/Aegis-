@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+﻿import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { ApiError, authApi, setUnauthorizedHandler, tokenStore } from '../api/client'
 import { AuthContext, type AuthContextValue } from './authContextValue'
@@ -7,8 +7,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthContextValue['user']>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const logout = useCallback(() => {
-    authApi.logout()
+  const logout = useCallback(async () => {
+    await authApi.logout()
     setUser(null)
   }, [])
 

@@ -212,8 +212,27 @@ export const authApi = {
     return request<User>('/auth/me')
   },
 
-  logout(): void {
-    tokenStore.clear()
+  /**
+   * Revoke this account's access tokens server-side, then clear local state.
+   *
+   * Clearing the token alone would only hide it in this browser; the token
+   * itself would stay valid until it expired.
+   */
+  async logout(): Promise<void> {
+    try {
+      await request<void>('/auth/logout', { method: 'POST' })
+    } catch {
+      // A failed revocation must not trap the user in a signed-in-looking UI.
+      // The token is cleared regardless; it expires on its own otherwise.
+    } finally {
+      tokenStore.clear()
+    }
+  },
+
+  logoutEverywhere(): Promise<void> {
+    return request<void>('/auth/logout-all', { method: 'POST' }).finally(() =>
+      tokenStore.clear(),
+    )
   },
 }
 

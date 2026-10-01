@@ -239,9 +239,9 @@ backend now rejects that at save time.
 | Control | Implementation |
 |---|---|
 | Passwords | Argon2id |
-| Sessions | Stateless JWT, 30-minute expiry, revocable |
+| Sessions | Stateless JWT, 30-minute expiry, revocable via a per-user session version |
 | Credential storage | Fernet encryption; key derived from `SECRET_KEY`, never persisted |
-| Credential display | Write-only. The API can return a secret to an authorised caller; the UI deliberately never calls that endpoint |
+| Credential display | Write-only. No API route returns a stored secret; the engine resolves credentials in-process |
 | SSRF | Loopback, private, link-local, cloud-metadata, and DNS-rebinding targets blocked; redirects not followed |
 | Authorization | Project ownership + membership, checked server-side on every request |
 | Target creation | Requires an explicit authorization attestation, recorded in the audit log |
