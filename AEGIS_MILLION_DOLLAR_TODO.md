@@ -541,14 +541,50 @@ becomes necessary.
 
 ## 1.11 P0 exit criteria
 
-- [ ] All P0 cross-tenant tests pass.
-- [ ] No report route can be accessed without project authorization.
-- [ ] No viewer/read-only role can mutate assessment state.
-- [ ] Outbound network policy is enforced at connection time.
-- [ ] Raw evidence handling has documented redaction and retention behavior.
-- [ ] Credential resolution is restricted, audited, and non-cacheable.
-- [ ] Full backend and frontend quality gates pass in a clean environment.
+Reviewed against the implementation rather than assumed from the checkboxes above.
+
+- [x] All P0 cross-tenant tests pass.
+  - `tests/services/test_execution_binding.py` (5),
+    `tests/services/test_execution_binding_validation.py` (8),
+    `tests/api/test_report_authorization.py` (6),
+    `tests/services/test_target_access_membership.py` (6),
+    `tests/api/test_credential_plaintext.py` (4).
+  - Each was written to fail before its fix and confirmed failing.
+- [x] No report route can be accessed without project authorization.
+  - `require_project_report()` is the single entry point for generate, download, and
+    compare; both report ids are authorized against the project in comparison.
+- [x] No viewer/read-only role can mutate assessment state.
+  - `tests/services/test_mutation_authorization.py` (9) covers owner and viewer across
+    tests, executions, findings, evidence, and reports.
+- [x] Outbound network policy is enforced at connection time.
+  - `resolve_target()` resolves once and pins the socket to a validated address, with the
+    hostname preserved in `Host` and TLS SNI. Verified against a live provider, not only
+    against mocked DNS.
+- [x] Raw evidence handling has documented redaction and retention behavior.
+  - Classification and redaction are implemented; retention is enforced with a bounded
+    default and a purge job. `docs/data-retention.md` covers both, and states plainly that
+    unlink is not a secure erase.
+- [x] Credential resolution is restricted, audited, and non-cacheable.
+  - The resolution endpoint was removed rather than restricted, so plaintext never crosses
+    the HTTP boundary. Creation, rotation, revocation, and deletion are audited; access
+    denials are audited.
+- [x] Full backend and frontend quality gates pass in a clean environment.
+  - Reproduced from a recreated database and a fresh `npm ci`: 381 backend tests, 53
+    frontend tests, 0 npm vulnerabilities, ruff, format, pyright clean, `alembic check`
+    reporting no drift.
 - [ ] A security-focused review of the changed paths is complete.
+  - **Not done, and I am not able to tick it.** Every fix in this phase was written by the
+    same agent that introduced nothing of the original risk, so there has been no
+    independent review. The changes have been verified by failing-test-first proof, live
+    provider verification where network behaviour changed, and clean-environment
+    reproduction, but that is not the same as a second pair of eyes. This criterion needs a
+    reviewer who did not write the code, and it is the one remaining item before P0 should
+    be considered signed off.
+
+**Summary.** Every P0 item except independent review is implemented and verified. Six
+cross-tenant and authorization defects were found and fixed, each proven by a test that
+failed before the fix. P0 should not be called complete until the security review above
+happens.
 
 ---
 
