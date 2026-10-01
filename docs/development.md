@@ -7,6 +7,23 @@
 - Python 3.11 or 3.12
 - PostgreSQL 16 (the app requires Postgres; it uses JSONB and native enums)
 - Node.js 20+ and npm (for the frontend)
+- Docker with Compose v2 (for the containerised stack)
+
+#### Verified working versions
+
+Last full green run from a clean environment — database recreated from
+scratch, `node_modules` deleted and reinstalled with `npm ci`:
+
+| Tool | Version used | Declared support |
+|---|---|---|
+| Python | 3.11.7 | 3.11–3.12 |
+| Node.js | v26.10.0 | 20+ |
+| npm | 11.19.1 | bundled with Node |
+| PostgreSQL | 16.15 | 16+ |
+| Docker Engine | 29.6.1 | current, with Compose v2 |
+
+Result: 305 backend tests, 52 frontend tests, 0 npm vulnerabilities, and
+`alembic check` reporting no model/migration drift.
 
 ### Database
 

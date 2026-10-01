@@ -277,14 +277,14 @@ Companion checklist to `production-readiness-plan.md`. Check items off as comple
 - [ ] Document disaster recovery steps
 
 ### Documentation
-- [ ] Write deployment guide
+- [x] Write deployment guide — `docs/deployment.md`: host provisioning, hardened firewall, secret injection, migrations-before-traffic ordering, reverse proxy and TLS, verification, updates, rollback, backups, and a troubleshooting table.
 - [ ] Write operator runbook (common incidents, how to respond)
 - [ ] Publish/version the OpenAPI reference
 
 ### Legal/compliance
 - [ ] Add Terms of Service covering authorized-testing-only use
-- [ ] Add consent/authorization attestation flow when a target is created
-- [ ] Confirm the "authorized security testing only" principle is enforced in-product, not just stated in README
+- [x] Add consent/authorization attestation flow when a target is created — `TargetCreate.authorization_attestation` is a required `Literal[True]`; the service records `authorization_attested_by` and `authorization_attested_at` and emits a `target.authorization_attested` audit event. The web form has a required checkbox and blocks submission without it.
+- [x] Confirm the "authorized security testing only" principle is enforced in-product, not just stated in README — the API refuses to create a target without the attestation, the attestation is attributed and audited, and `docs/security.md` / `docs/Manual.md` carry the same statement. This is enforcement of the *claim*, not a substitute for the legal terms in 'Add Terms of Service covering authorized-testing-only use', which remains open.
 
 **Phase 7 exit check:** [ ] Comfortable pointing a real, consenting customer at it and being on-call for it
 

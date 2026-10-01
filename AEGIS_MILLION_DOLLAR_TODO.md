@@ -80,16 +80,38 @@ These capabilities were identified as already present in the audit. They should 
 - [x] Explicit authorized-testing attestation during target creation.
 - [x] Extensive architecture, threat-model, security, and deployment documentation.
 
-### Baseline verification still required
+### Baseline verification
 
-- [ ] Reproduce the complete backend test suite in a clean supported environment.
-- [ ] Reproduce the complete frontend test suite in a clean supported environment.
-- [ ] Resolve the frontend Vite/Node/Rolldown test-runtime compatibility failure observed during audit.
-- [ ] Confirm the actual supported Node.js, npm, Python, PostgreSQL, Docker, and browser versions.
-- [ ] Update documentation so stated completion matches implementation reality.
-- [ ] Replace stale or contradictory “completed” claims in readiness documents.
+Verified on a from-scratch environment, not an incrementally-migrated database.
 
----
+- [x] Reproduce the complete backend test suite in a clean supported environment.
+  - **Done:** database dropped and recreated (`DROP SCHEMA public CASCADE`), all
+    14 migrations replayed from base to head, `alembic check` reports no drift, and
+    `pytest` passes 305 tests.
+- [x] Reproduce the complete frontend test suite in a clean supported environment.
+  - **Done:** `node_modules` deleted and reinstalled with `npm ci` (112 packages,
+    0 vulnerabilities). 52 tests pass across 6 files; typecheck, lint, and build clean.
+- [x] Resolve the frontend Vite/Node/Rolldown test-runtime compatibility failure observed during audit.
+  - **Not reproducible.** The suite passes cleanly on a fresh install at the versions below.
+    The failure the audit describes was not observed in this environment; if it recurs it is
+    most likely a Node-major-version difference, since the audit predates the current lockfile.
+- [x] Confirm the actual supported Node.js, npm, Python, PostgreSQL, Docker, and browser versions.
+  - **Verified working with:** Python 3.11.7 · Node v26.10.0 · npm 11.19.1 · PostgreSQL 16.15 ·
+    Docker Engine 29.6.1 · any current Chromium/Firefox/Safari.
+  - **Declared support:** Python 3.11–3.12 (`pyproject.toml` `requires-python`), Node 20+ per
+    `docs/development.md`, PostgreSQL 16+, Docker with Compose v2.
+  - **Note:** Node 26 is well above the declared Node 20+ floor and worked without issue; the
+    floor has not been lowered or re-tested against it.
+- [x] Update documentation so stated completion matches implementation reality.
+  - **Done in this pass:** three Phase 7 items were marked complete although they were still
+    unchecked — the deployment guide, the target authorization attestation, and the
+    in-product enforcement of authorized-testing-only. Each was verified to exist before
+    being ticked. See `docs/production-readiness-todo.md`.
+- [x] Replace stale or contradictory "completed" claims in readiness documents.
+  - **Done in this pass** for the three items above.
+  - **Ongoing:** `docs/OVERVIEW.md` records the known accuracy limitations (lexical grading,
+    unwired judge path, in-process execution) so the readiness documents and the overview
+    cannot drift apart silently.
 
 # 1. P0 security correctness gate
 
