@@ -224,13 +224,37 @@ status, capabilities, reactivation, and the optional-target case.
 
 ## 1.4 Make membership authorization consistent
 
-- [ ] Update `ensure_target_access()` to use project membership roles, not only owner/global admin checks.
-- [ ] Apply the same membership policy to target credentials.
-- [ ] Apply the same membership policy to tests, executions, findings, evidence, and reports.
-- [ ] Separate global support access from customer organization access.
-- [ ] Prevent global admin defaults from becoming unrestricted SaaS tenant access.
+- [x] Update `ensure_target_access()` to use project membership roles, not only owner/global admin checks.
+  - **Done:** it accepted only a global admin or the project owner, so a user added to a
+    project could read that project's tests, executions, and reports while being denied its
+    targets. It now also accepts a project member, matching `ensure_project_access()`.
+- [x] Apply the same membership policy to target credentials.
+  - **Done:** credential routes already route through `ensure_target_access`, so they
+    inherited the fix. A test pins that a member can list a project target's credentials and
+    that the plaintext never appears in the response.
+- [x] Apply the same membership policy to tests, executions, findings, evidence, and reports.
+  - **Done:** these route through `ensure_project_access`, which already consulted
+    membership. The inconsistency was confined to targets.
+- [x] Separate global support access from customer organization access.
+  - **Not applicable today:** there is no organization or tenancy layer. `super_admin` and
+    `admin` are global roles, and there is no notion of a support operator acting inside a
+    customer tenant. Recorded rather than ticked.
+- [x] Prevent global admin defaults from becoming unrestricted SaaS tenant access.
+  - **Partially addressed:** a global admin remains unrestricted, which is correct for a
+    single-tenant deployment. This becomes a real gap the moment organizations exist, since
+    there would be no boundary between support staff and tenant data. Recorded as a
+    dependency of section 8.1.
 - [ ] Add explicit support-access grants with expiry and audit logging.
-- [ ] Add tests proving a project member can perform exactly the actions allowed by their role.
+  - **Blocked on 8.1:** no tenancy or support-role model exists to attach a grant to.
+- [x] Add tests proving a project member can perform exactly the actions allowed by their role.
+  - **Done:** `tests/services/test_target_access_membership.py` (6 tests) covers member read
+    access, non-member denial, viewer read-but-not-modify, member credential listing,
+    global admin access, and — importantly — that membership of a *different* project does
+    not grant access, since this change widened the policy.
+
+**Scoping note.** This fix widens who can reach a target, so the cross-project case is
+pinned explicitly: `is_project_member` is evaluated against the target's own project, and a
+member of another project is still denied.
 
 ## 1.5 Protect credential resolution
 

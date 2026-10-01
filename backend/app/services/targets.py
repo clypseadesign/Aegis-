@@ -12,7 +12,12 @@ from app.models.target import Target
 from app.models.user import User, UserRole
 from app.schemas import TargetCreate, TargetUpdate
 from app.services.audit import record_audit_event
-from app.services.projects import get_project_for_user
+from app.services.projects import (
+    MUTATING_OPERATIONS,
+    can_mutate_project,
+    get_project_for_user,
+    is_project_member,
+)
 
 ADMIN_ROLES = {UserRole.ADMIN, UserRole.SUPER_ADMIN}
 
@@ -35,13 +40,21 @@ def ensure_target_access(
     target: Target,
     operation: str,
 ) -> None:
-    """Authorize target access and record denied attempts."""
+    """Authorize target access and record denied attempts.
+
+    A target is a project resource, so the policy matches
+    ``ensure_project_access``: a project member has access, a non-member does
+    not. This previously accepted only global admins and the project owner,
+    which meant a member could read the project's tests, executions, and
+    reports while being denied its targets.
+    """
 
     project = get_target_project(session, target)
     is_admin = user.role in ADMIN_ROLES
     is_owner = project.owner_id == user.id
+    is_member = is_project_member(session, user, project)
 
-    if not is_admin and not is_owner:
+    if not is_admin and not is_owner and not is_member:
         record_audit_event(
             session,
             actor_id=user.id,
@@ -52,7 +65,7 @@ def ensure_target_access(
         )
         raise PermissionDeniedError()
 
-    if operation in {"update", "delete"} and user.role == UserRole.VIEWER:
+    if operation in MUTATING_OPERATIONS and not can_mutate_project(user, project):
         record_audit_event(
             session,
             actor_id=user.id,
