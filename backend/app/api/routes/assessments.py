@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ProjectNotFoundError
 from app.db.session import get_db_session
+from app.models.evidence import Sensitivity
 from app.models.execution import ExecutionStatus
 from app.schemas import (
     EvidenceCreate,
@@ -298,9 +299,32 @@ async def list_evidence_endpoint(
     current_user: CurrentUser,
     session: DatabaseSession,
 ) -> list[EvidenceResponse]:
-    return [
-        EvidenceResponse.model_validate(e) for e in list_evidence(session, finding_id, current_user)
-    ]
+    """List evidence for a finding.
+
+    Audited because evidence is the most sensitive data AegisAI holds: it
+    contains the prompts sent and the model's responses, including whatever the
+    model was induced to disclose.
+    """
+
+    records = list_evidence(session, finding_id, current_user)
+
+    record_audit_event(
+        session,
+        actor_id=current_user.id,
+        action="evidence.viewed",
+        resource_type="finding",
+        resource_id=str(finding_id),
+        event_metadata={
+            "project_id": str(project_id),
+            # Counts only. Evidence content is never placed in an audit entry.
+            "record_count": len(records),
+            "restricted_count": sum(
+                1 for record in records if record.sensitivity >= int(Sensitivity.RESTRICTED)
+            ),
+        },
+    )
+
+    return [EvidenceResponse.model_validate(record) for record in records]
 
 
 @router.post("/reports", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)

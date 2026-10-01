@@ -142,6 +142,10 @@ class EvidenceResponse(BaseModel):
     kind: str
     description: str | None
     content: dict[str, Any]
+    # What sensitive data this evidence was found to contain.
+    sensitivity: int
+    detected_kinds: list[str]
+    redacted: int
     created_at: datetime
 
 

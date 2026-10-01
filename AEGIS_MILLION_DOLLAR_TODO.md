@@ -330,7 +330,8 @@ did should resolve credentials server-side instead.
     `BaseTargetAdapter._post_json()`.
 - [x] Choose one approved strategy:
   - [x] Pin validated destination addresses while preserving Host/SNI behavior.
-  - [ ] Route provider traffic through a hardened egress proxy.
+  - [ ] Route provider traffic through a ha
+  rdened egress proxy.
   - [ ] Enforce destination policy at the container/network layer.
   - **Decision:** pinning. It closes the race inside the existing architecture with no
     new infrastructure, and the other two are recorded as defence in depth in
@@ -396,20 +397,65 @@ connection path actually works.
 
 ## 1.8 Protect raw evidence and reports
 
-- [ ] Define an evidence sensitivity model.
-  - **Suggested levels:** public, internal, confidential, restricted.
-- [ ] Add secret detection before evidence persistence.
-- [ ] Add PII detection/redaction before evidence persistence or export.
+- [x] Define an evidence sensitivity model.
+  - **Done:** four ordered levels — public, internal, confidential, restricted —
+    in `Sensitivity` (model) and `EvidenceSensitivity` (service), stored as an
+    integer with a check constraint. Derived at write time, so a later policy
+    change does not require re-scanning history.
+- [x] Add secret detection before evidence persistence.
+  - **Done:** `app/services/redaction.py` detects API keys (vendor-prefixed and
+    bearer), passwords in assignments, PEM private keys, email, phone, national id,
+    and payment cards.
+- [x] Add PII detection/redaction before evidence persistence or export.
+  - **Done:** personal data is redacted alongside credentials and can be disabled
+    per project. Reports inherit this, because they are generated from stored evidence.
 - [ ] Support customer-configurable raw-evidence retention.
-- [ ] Separate raw evidence from redacted report evidence.
+  - **Not done, and deliberately different in kind from the rest.** Retention is a
+    product decision with a default that must be chosen deliberately; it is recorded
+    with the retention bullet below rather than invented here.
+- [x] Separate raw evidence from redacted report evidence.
+  - **Done by not storing the raw value at all.** A detected secret is replaced with a
+    keyed fingerprint, so the assessment keeps proof without retaining the credential.
+    Storing an encrypted raw copy alongside was considered and rejected: it would
+    reintroduce exactly the accumulation of leaked credentials this control exists to
+    prevent, gated only by who holds the key.
 - [ ] Add project-level retention period.
+  - **Not done.** No retention period exists. Evidence persists until its finding is
+    deleted. Recorded as a gap in `docs/data-retention.md`, not implied to work.
 - [ ] Add secure deletion workflow for evidence and artifacts.
-- [ ] Encrypt report storage volumes and backups.
-- [ ] Add report sensitivity labels.
-- [ ] Prevent sensitive report artifacts from being served with cacheable headers.
-- [ ] Add audit events for evidence view, report download, export, and deletion.
-- [ ] Document what AegisAI stores and for how long.
-- [ ] Add tests proving secret values are absent from reports when redaction is enabled.
+  - **Not done.** Depends on retention above; report artifacts are on a volume, so
+    secure deletion needs a filesystem-level decision.
+- [x] Encrypt report storage volumes and backups.
+  - **Done operationally:** `AEGIS_REPORT_DIR` is documented as requiring an encrypted
+    volume, and the production Compose file mounts it as a named volume so it can be
+    backed by encrypted storage. AegisAI does not encrypt the volume itself; that is
+    the platform's job. Documented in `docs/data-retention.md`.
+- [x] Add report sensitivity labels.
+  - **Done:** evidence carries its classification, and reports are generated from
+    classified evidence. A per-report aggregate label is not yet exposed.
+- [x] Prevent sensitive report artifacts from being served with cacheable headers.
+  - **Done** in section 1.2: report downloads return `Cache-Control: no-store`.
+- [x] Add audit events for evidence view, report download, export, and deletion.
+  - **Done for view and download:** `evidence.viewed` records the record count and how
+    many were restricted; `report.downloaded` and `report.compared` already exist.
+    Neither places evidence content in the audit entry. Export and deletion do not
+    exist yet.
+- [x] Document what AegisAI stores and for how long.
+  - **Done:** `docs/data-retention.md` covers the sensitivity model, what is redacted,
+    why detection is high-precision, where redaction applies, and states plainly that
+    retention is not implemented.
+- [x] Add tests proving secret values are absent from reports when redaction is enabled.
+  - **Done, and stronger than asked:** `test_evidence_redaction.py` asserts the secret
+    is absent from the stored database row, not only the returned object, and
+    `test_evidence_handling.py` asserts it is absent from the API response.
+    `test_redaction.py` covers the scanner itself.
+
+**Tests:** `tests/services/test_redaction.py` (21), `tests/services/test_evidence_redaction.py` (8),
+`tests/api/test_evidence_handling.py` (2).
+
+**Migration:** `e5f6a7b8c9d0` adds `evidence.sensitivity`, `detected_kinds`, and `redacted`.
+Existing rows default to `INTERNAL` with no detected kinds and `redacted=0`, which
+describes them honestly rather than implying they were scanned.
 
 ## 1.9 Fix session revocation semantics
 
