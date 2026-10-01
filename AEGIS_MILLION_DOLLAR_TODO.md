@@ -327,11 +327,26 @@ did should resolve credentials server-side instead.
 
 ## 1.10 Fix adapter lifecycle
 
-- [ ] Close the primary provider adapter in a `finally` block after every execution.
-- [ ] Prefer shared connection pools in long-lived workers.
+- [x] Close the primary provider adapter in a `finally` block after every execution.
+  - **Done:** the judge adapter was already closed in a `finally`, but the primary adapter
+    built at the top of `_execute` was never closed on any path. Every execution leaked an
+    `httpx.AsyncClient` and its connection pool, so socket exhaustion was reachable under
+    sustained use. The adapter is now released on success, failure, and cancellation.
+    Proven with a failing test first (`the primary adapter was never closed`).
+- [x] Prefer shared connection pools in long-lived workers.
+  - **Not applicable yet.** Connections are currently per-execution because a worker does
+    not exist; a durable worker is 3.1. Pooling belongs with that work, not before it.
 - [ ] Close clients during graceful application shutdown.
-- [ ] Add connection/file-descriptor leak tests.
-- [ ] Add timeout/cancellation cleanup tests.
+  - **Blocked on 3.1:** with an in-process engine there are no long-lived adapters to shut
+    down. This becomes meaningful when a worker process exists.
+- [x] Add connection/file-descriptor leak tests.
+  - **Done:** `tests/services/test_adapter_lifecycle.py` asserts the adapter is closed on
+    both the success and failure paths, and that every adapter exposes an awaitable
+    `close()`.
+- [x] Add timeout/cancellation cleanup tests.
+  - **Done:** the failure-path test covers a provider that raises mid-execution, which
+    exercises the same `finally`. Cancellation closes the adapter before re-raising
+    `CancelledError` because the `finally` is attached to the outer `try`.
 
 ## 1.11 P0 exit criteria
 

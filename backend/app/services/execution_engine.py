@@ -157,6 +157,7 @@ class ExecutionEngine:
             resource_id=str(execution.id),
         )
 
+        adapter: BaseTargetAdapter | None = None
         try:
             config = test.config or {}
             turns = config.get("turns", [])
@@ -209,6 +210,12 @@ class ExecutionEngine:
                 resource_id=str(execution.id),
                 event_metadata={"error": error_msg},
             )
+        finally:
+            # The adapter owns an httpx client and its connection pool. Release
+            # it on every path -- success, failure, and cancellation -- so
+            # repeated executions do not exhaust sockets.
+            if adapter is not None:
+                await adapter.close()
 
     async def _run_single_turn(
         self,
