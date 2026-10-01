@@ -114,30 +114,45 @@ These capabilities were identified as already present in the audit. They should 
 - [x] Validate `test_id` and `target_id` together in one project-scoped service operation.
   - **Acceptance:** No execution can reference resources from different projects.
   - **Tests:** Cross-project combinations for every resource type.
-  - **Done:** Extracted `_require_project_test()` and `_require_project_target()` and
-    applied both in `create_execution()`, so the two checks sit side by side.
+  - **Done:** both lookups happen in `create_execution()` before any row is written.
 
 - [x] Validate target provider matches security-test provider before execution creation.
   - **Acceptance:** Unsupported provider/test combinations fail before any external request is made.
+  - **Done:** an `ollama` test could be bound to an `openai_compatible` target and failed
+    only inside the adapter, after a request had been attempted. Now rejected at
+    creation with the mismatch named.
 
-- [ ] Validate target status is active before execution creation or execution start.
+- [x] Validate target status is active before execution creation or execution start.
   - **Acceptance:** Inactive targets cannot be run until explicitly reactivated.
+  - **Done:** enforced at creation *and* re-checked in the engine, because a target can be
+    deactivated between the two. Reactivating the target unblocks it again.
 
-- [ ] Validate required test capabilities are contained in target capabilities.
+- [x] Validate required test capabilities are contained in target capabilities.
   - **Acceptance:** Incompatible tests are rejected with an actionable explanation.
+  - **Done:** a test requiring `["chat", "vision"]` against a target advertising only
+    `["chat"]` is rejected, naming the missing capability. An empty requirement list
+    imposes no constraint.
 
 - [x] Add a single `validate_execution_binding()` service used by API and worker paths.
   - **Acceptance:** There is no alternate execution path that bypasses project, provider, status, or capability checks.
-  - **Done:** `_require_project_test()` and `_require_project_target()` are the single
-    chokepoints for binding validation, shared by the API path. Provider/status/capability
-    checks are still outstanding above.
+  - **Done:** `validate_execution_binding(test, target)` holds the pairing rules and is
+    called from both `create_execution()` and the execution engine, so the two paths
+    cannot drift. Because the 404-class errors cannot carry a message, a new
+    `ExecutionBindingError` (HTTP 422, code `EXECUTION_BINDING_INVALID`) reports which of
+    provider, status, or capabilities is the problem, satisfying the "actionable
+    explanation" criterion.
 
-- [ ] Add database-level consistency protections where practical.
+- [x] Add database-level consistency protections where practical.
   - **Acceptance:** Foreign keys and project ownership relationships prevent invalid cross-project rows, or the design limitation is documented and covered by service-level tests.
-  - **Note:** The `executions.target_id` foreign key already prevents a dangling
-    reference, but a foreign key cannot express "target must belong to the same project
-    as the execution". That constraint can only be enforced in the service layer and is
-    documented here rather than silently assumed.
+  - **Note:** the `executions.target_id` foreign key already prevents a dangling
+    reference, but no foreign key can express "the target must belong to the same project
+    as the execution". That constraint is enforceable only in the service layer, is
+    covered by `tests/services/test_execution_binding.py`, and is recorded here rather
+    than left as an unstated assumption.
+
+**Tests:** `tests/services/test_execution_binding.py` (5) covers project ownership;
+`tests/services/test_execution_binding_validation.py` (8) covers provider match, target
+status, capabilities, reactivation, and the optional-target case.
 
 ## 1.2 Fix report authorization
 

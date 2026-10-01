@@ -38,6 +38,19 @@ class AssessmentNotFoundError(Exception):
         super().__init__("Resource not found.")
 
 
+class ExecutionBindingError(Exception):
+    """Raised when a test and target exist but cannot be paired for a run.
+
+    Distinct from ``AssessmentNotFoundError``: the resources are real, the
+    combination is not runnable. Carries a message so the caller learns which
+    of provider, target status, or capabilities is the problem.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
 class EmailAlreadyRegisteredError(Exception):
     """Raised when attempting to register an email that is already in use."""
 
@@ -163,6 +176,25 @@ async def assessment_not_found_handler(
 
     return JSONResponse(
         status_code=404,
+        content=response.model_dump(),
+    )
+
+
+async def execution_binding_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """Return a standardized response when a test/target pairing is unrunnable."""
+
+    error = APIError(
+        code="EXECUTION_BINDING_INVALID",
+        message=str(exc),
+    )
+
+    response = APIErrorResponse(error=error)
+
+    return JSONResponse(
+        status_code=422,
         content=response.model_dump(),
     )
 

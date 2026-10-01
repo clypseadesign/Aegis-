@@ -7,6 +7,7 @@ from app.api.errors import (
     AuthenticationRequiredError,
     CredentialNotFoundError,
     EmailAlreadyRegisteredError,
+    ExecutionBindingError,
     InvalidCredentialsError,
     MembershipConflictError,
     PermissionDeniedError,
@@ -17,6 +18,7 @@ from app.api.errors import (
     authentication_required_handler,
     credential_not_found_handler,
     email_already_registered_handler,
+    execution_binding_handler,
     invalid_credentials_handler,
     membership_conflict_handler,
     permission_denied_handler,
@@ -46,6 +48,7 @@ app.add_exception_handler(PermissionDeniedError, permission_denied_handler)
 app.add_exception_handler(TargetNotFoundError, target_not_found_handler)
 app.add_exception_handler(CredentialNotFoundError, credential_not_found_handler)
 app.add_exception_handler(AssessmentNotFoundError, assessment_not_found_handler)
+app.add_exception_handler(ExecutionBindingError, execution_binding_handler)
 app.add_exception_handler(RateLimitExceededError, rate_limit_exceeded_handler)
 app.add_exception_handler(MembershipConflictError, membership_conflict_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)

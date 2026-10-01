@@ -5,13 +5,17 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import AssessmentNotFoundError, ProjectNotFoundError
+from app.api.errors import (
+    AssessmentNotFoundError,
+    ExecutionBindingError,
+    ProjectNotFoundError,
+)
 from app.models.evidence import Evidence
 from app.models.execution import Execution, ExecutionStatus
 from app.models.finding import Finding, FindingStatus
 from app.models.project import Project
 from app.models.report import Report
-from app.models.target import Target
+from app.models.target import Target, TargetStatus
 from app.models.test import SecurityTest
 from app.models.user import User
 from app.schemas import (
@@ -61,18 +65,59 @@ def _require_project_test(session: Session, project_id: UUID, test_id: UUID) -> 
         raise AssessmentNotFoundError()
 
 
-def _require_project_target(session: Session, project_id: UUID, target_id: UUID) -> None:
-    """Ensure a target belongs to the given project.
+def _require_project_target(session: Session, project_id: UUID, target_id: UUID) -> Target:
+    """Ensure a target belongs to the given project and is usable.
 
     Targets are a separate resource from projects, so an execution can name one
     that lives in a different project. Without this check the execution engine
     would resolve that target's stored credentials and send attacker-chosen
     prompts to another tenant's model endpoint.
+
+    Returns the target so callers can validate the test/target pairing without
+    a second lookup.
     """
 
     target = session.get(Target, target_id)
     if target is None or target.project_id != project_id:
         raise AssessmentNotFoundError()
+    return target
+
+
+def validate_execution_binding(
+    test: SecurityTest | None,
+    target: Target | None,
+) -> None:
+    """Validate that a security test can actually be run against a target.
+
+    Ownership is checked separately. This covers the pairing itself: the
+    provider must match, the target must be active, and the target must
+    advertise every capability the test requires. Failing these at creation
+    time avoids a run that is guaranteed to fail or, worse, to reach the wrong
+    provider.
+    """
+
+    if test is None or target is None:
+        return
+
+    if test.provider and test.provider != target.provider.value:
+        raise ExecutionBindingError(
+            f"test provider {test.provider!r} does not match target provider "
+            f"{target.provider.value!r}"
+        )
+
+    if target.status != TargetStatus.ACTIVE:
+        raise ExecutionBindingError(
+            f"target is {target.status.value!r}; reactivate it before running tests"
+        )
+
+    required = set(test.required_capabilities or ())
+    available = set(target.capabilities or ())
+    missing = sorted(required - available)
+    if missing:
+        raise ExecutionBindingError(
+            f"target does not advertise required capabilit"
+            f"{'y' if len(missing) == 1 else 'ies'}: {', '.join(missing)}"
+        )
 
 
 def create_security_test(
@@ -162,10 +207,21 @@ def create_execution(
     user: User,
 ) -> Execution:
     _require_project_write(session, user, project_id)
+
+    test: SecurityTest | None = None
     if payload.test_id is not None:
-        _require_project_test(session, project_id, payload.test_id)
+        test = session.get(SecurityTest, payload.test_id)
+        if test is None or test.project_id != project_id:
+            raise AssessmentNotFoundError()
+
+    target: Target | None = None
     if payload.target_id is not None:
-        _require_project_target(session, project_id, payload.target_id)
+        target = _require_project_target(session, project_id, payload.target_id)
+
+    # Provider, target status, and capabilities are checked together so an
+    # execution cannot be created against a pairing that cannot run.
+    validate_execution_binding(test, target)
+
     execution = Execution(
         project_id=project_id,
         test_id=payload.test_id,

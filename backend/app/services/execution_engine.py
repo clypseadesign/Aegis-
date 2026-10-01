@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.adapters.base import BaseTargetAdapter, ModelProviderError
 from app.adapters.registry import create_model_adapter
+from app.api.errors import AssessmentNotFoundError
 from app.db.session import create_session_factory
 from app.models.execution import Execution, ExecutionResult, ExecutionStatus
 from app.models.execution_step import ExecutionStep
@@ -25,6 +26,7 @@ from app.models.project import Project
 from app.models.target import Target
 from app.models.test import SecurityTest
 from app.security.secrets import SecretStore, get_secret_store
+from app.services.assessments import validate_execution_binding
 from app.services.audit import record_audit_event
 from app.services.evidence import persist_execution_evidence
 from app.services.finding_classifier import (
@@ -143,6 +145,14 @@ class ExecutionEngine:
             target = session.get(Target, execution.target_id)
         if target is None:
             await self._record_failure(session, execution_id, "target not found")
+            return
+
+        # Re-check the pairing at run time as well as at creation time. A target
+        # can be deactivated, or its capabilities changed, between the two.
+        try:
+            validate_execution_binding(test, target)
+        except AssessmentNotFoundError as exc:
+            await self._record_failure(session, execution_id, str(exc))
             return
 
         execution.status = ExecutionStatus.RUNNING
