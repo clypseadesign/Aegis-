@@ -3,10 +3,17 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+
+# Default evidence retention, in days.
+#
+# Evidence is the most sensitive data AegisAI holds: it contains the prompts
+# sent and the responses that caused a finding. A bounded default means a
+# project cannot silently keep it forever.
+DEFAULT_EVIDENCE_RETENTION_DAYS = 90
 
 
 class Project(Base):
@@ -33,6 +40,22 @@ class Project(Base):
     description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    # How long evidence and report artifacts are kept for this project.
+    #
+    # 0 means keep indefinitely, which is only appropriate when the operator has
+    # arranged their own deletion. Anything above 0 is enforced by
+    # ``app.services.retention.cleanup_expired_evidence``.
+    evidence_retention_days: Mapped[int] = mapped_column(
+        Integer,
+        CheckConstraint(
+            "evidence_retention_days >= 0",
+            name="ck_project_evidence_retention_non_negative",
+        ),
+        nullable=False,
+        default=DEFAULT_EVIDENCE_RETENTION_DAYS,
+        server_default=str(DEFAULT_EVIDENCE_RETENTION_DAYS),
     )
 
     created_at: Mapped[datetime] = mapped_column(

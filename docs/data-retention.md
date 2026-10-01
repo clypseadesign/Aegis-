@@ -1,4 +1,4 @@
-# AegisAI Data Retention and Evidence Handling
+﻿# AegisAI Data Retention and Evidence Handling
 
 What AegisAI stores, how sensitive it is, and how long it is kept.
 
@@ -78,19 +78,44 @@ count and how many were restricted. The event never contains evidence content.
 
 ## Retention
 
-**Not yet implemented.** There is no automated retention or deletion job, and
-no configurable retention period. Evidence persists until its finding is
-deleted.
+Each project declares how long its evidence and report artifacts are kept, in
+`projects.evidence_retention_days`. The default is **90 days**. A value of `0`
+means keep indefinitely, for operators who arrange their own deletion.
 
-This is a known gap, recorded in the roadmap rather than implied to exist. When
-added, it needs:
+A cleanup pass removes what has aged past each project's window:
 
-- a per-project retention period, defaulting to something finite;
-- a deletion job that removes evidence and generated artifacts past the period;
-- a secure-deletion path, since report artifacts live on a filesystem volume;
-- an audit record of what was deleted.
+```bash
+# From the repository root
+python -m app.cli.retention --dry-run     # report what would go, delete nothing
+python -m app.cli.retention --json        # machine-readable result
+python -m app.cli.retention               # perform the purge
+```
 
-Until then, an operator who needs to bound retention must delete the project.
+Retention only works if something runs it. Schedule it with a systemd timer or a
+Kubernetes CronJob; it is idempotent, so a second run over the same data removes
+nothing. Each pass that removes anything writes an `evidence.retention_purged`
+audit event with the counts.
+
+### What the window applies to
+
+- **Evidence rows** — the prompts and responses. This is the sensitive payload.
+- **Report artifacts** — the generated files on the report volume.
+
+It does **not** apply to findings or to the report rows themselves. A finding is
+the assessment result; deleting it because its supporting evidence aged out would
+throw away the answer while keeping the metadata. An expired report keeps its
+row as a record of what was produced, with `path` cleared so a stale download
+cannot be served and re-generation is unambiguous.
+
+### Secure deletion is not guaranteed
+
+Deleting a file from the report volume is an unlink, not a secure erase. On
+copy-on-write filesystems and SSDs, the old blocks may persist. Guaranteeing
+otherwise needs volume encryption with key destruction, which is a deployment
+concern. Database rows are removed through a normal transaction.
+
+If you need a hard guarantee, encrypt the report volume and destroy the volume
+key when you want the data unrecoverable.
 
 ## Operational note: encrypted volumes
 
@@ -106,10 +131,12 @@ be coordinated with a backup that still holds the old key.
 ## Verifying
 
 ```powershell
-pytest tests/services/test_redaction.py tests/services/test_evidence_redaction.py tests/api/test_evidence_handling.py
+pytest tests/services/test_redaction.py tests/services/test_evidence_redaction.py tests/services/test_retention.py tests/api/test_evidence_handling.py
 ```
 
-Covers detection precision, redaction of secrets and PII, fingerprint
-stability, classification at each level, that the secret is absent from both the
-returned object and the stored row, that redaction can be disabled without
-unlabelling, and that viewing evidence is audited.
+Covers detection precision, redaction of secrets and PII, fingerprint stability,
+classification at each level, that the secret is absent from both the returned
+object and the stored row, that redaction can be disabled without unlabelling,
+that viewing evidence is audited, and the retention window: what is removed,
+what survives, project scoping, idempotency, and that a dry run deletes
+nothing.

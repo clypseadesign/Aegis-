@@ -409,22 +409,31 @@ connection path actually works.
 - [x] Add PII detection/redaction before evidence persistence or export.
   - **Done:** personal data is redacted alongside credentials and can be disabled
     per project. Reports inherit this, because they are generated from stored evidence.
-- [ ] Support customer-configurable raw-evidence retention.
-  - **Not done, and deliberately different in kind from the rest.** Retention is a
-    product decision with a default that must be chosen deliberately; it is recorded
-    with the retention bullet below rather than invented here.
+- [x] Support customer-configurable raw-evidence retention.
+  - **Done:** `projects.evidence_retention_days`, defaulting to a bounded 90 days so a
+    project cannot silently retain evidence without someone deciding to. `0` means keep
+    indefinitely for operators who arrange their own deletion.
 - [x] Separate raw evidence from redacted report evidence.
   - **Done by not storing the raw value at all.** A detected secret is replaced with a
     keyed fingerprint, so the assessment keeps proof without retaining the credential.
     Storing an encrypted raw copy alongside was considered and rejected: it would
     reintroduce exactly the accumulation of leaked credentials this control exists to
     prevent, gated only by who holds the key.
-- [ ] Add project-level retention period.
-  - **Not done.** No retention period exists. Evidence persists until its finding is
-    deleted. Recorded as a gap in `docs/data-retention.md`, not implied to work.
-- [ ] Add secure deletion workflow for evidence and artifacts.
-  - **Not done.** Depends on retention above; report artifacts are on a volume, so
-    secure deletion needs a filesystem-level decision.
+- [x] Add project-level retention period.
+  - **Done:** per project, enforced by `app/services/retention.py` and runnable as
+    `python -m app.cli.retention` with `--dry-run` and `--json`. Verified live against the
+    running database.
+  - **Deliberate scope:** the window removes evidence rows and report *artifacts*, not
+    findings or report rows. A finding is the assessment result; deleting it because its
+    evidence aged out would discard the answer while keeping the metadata. An expired
+    report keeps its row with `path` cleared, so a stale download cannot be served.
+- [x] Add secure deletion workflow for evidence and artifacts.
+  - **Done, with a documented limit.** Evidence is deleted through a normal transaction
+    and artifacts are unlinked from the report volume; every pass that removes anything
+    writes an `evidence.retention_purged` audit event with counts. **Unlink is not a secure
+    erase** — on copy-on-write filesystems and SSDs old blocks may persist. A hard guarantee
+    needs volume encryption with key destruction, which is a deployment concern.
+    `docs/data-retention.md` states this rather than implying secure erasure.
 - [x] Encrypt report storage volumes and backups.
   - **Done operationally:** `AEGIS_REPORT_DIR` is documented as requiring an encrypted
     volume, and the production Compose file mounts it as a named volume so it can be
@@ -453,7 +462,13 @@ connection path actually works.
 **Tests:** `tests/services/test_redaction.py` (21), `tests/services/test_evidence_redaction.py` (8),
 `tests/api/test_evidence_handling.py` (2).
 
-**Migration:** `e5f6a7b8c9d0` adds `evidence.sensitivity`, `detected_kinds`, and `redacted`.
+**Tests:** `tests/services/test_retention.py` (10) covers the default being bounded, the cutoff
+derivation, expired evidence removed, in-window evidence kept, indefinite-retention
+projects skipped, artifact deletion, idempotency, audit emission, and a dry run that
+deletes nothing.
+
+**Migrations:** `e5f6a7b8c9d0` adds `evidence.sensitivity`, `detected_kinds`, and `redacted`;
+`f6a7b8c9d0e1` adds `projects.evidence_retention_days`.
 Existing rows default to `INTERNAL` with no detected kinds and `redacted=0`, which
 describes them honestly rather than implying they were scanned.
 
