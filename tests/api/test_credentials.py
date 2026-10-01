@@ -124,12 +124,14 @@ def test_credential_crud_and_secret_redaction() -> None:
         assert body["revoked"] is False
         assert "encrypted_value" not in body
 
+        # There is no HTTP path that returns the stored value: plaintext is
+        # resolved in-process by the execution engine only.
         resolve_response = client.post(
             f"/api/v1/targets/{target_id}/credentials/{credential_id}/resolve",
             headers=headers,
         )
-        assert resolve_response.status_code == 200
-        assert resolve_response.json() == "sk-test-0123"
+        assert resolve_response.status_code in {404, 405}
+        assert "sk-test-0123" not in resolve_response.text
 
         rotate_response = client.post(
             f"/api/v1/targets/{target_id}/credentials/{credential_id}/rotate",

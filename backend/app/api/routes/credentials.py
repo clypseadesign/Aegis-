@@ -18,7 +18,6 @@ from app.services.credentials import (
     delete_target_credential,
     get_credential,
     list_target_credentials,
-    resolve_credential_value,
     revoke_target_credential,
     rotate_target_credential,
 )
@@ -107,34 +106,6 @@ async def get_credential_endpoint(
         raise CredentialNotFoundError()
     _require_target_access(session, current_user, target_id, "read")
     return _credential_response(credential)
-
-
-@router.post(
-    "/{credential_id}/resolve",
-    response_model=str,
-)
-async def resolve_credential_endpoint(
-    target_id: UUID,
-    credential_id: UUID,
-    current_user: CurrentUser,
-    session: DatabaseSession,
-    secret_store: SecretStoreDep,
-) -> str:
-    """Resolve a credential value for the authorized authenticated user."""
-
-    credential = get_credential(session, credential_id)
-    if credential.target_id != target_id:
-        raise CredentialNotFoundError()
-    _require_target_access(session, current_user, target_id, "read")
-    value = resolve_credential_value(
-        session,
-        secret_store,
-        target_id,
-        credential_type=credential.credential_type,
-    )
-    if value is None:
-        raise CredentialNotFoundError()
-    return value
 
 
 @router.post(

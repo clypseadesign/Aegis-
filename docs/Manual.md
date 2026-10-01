@@ -475,8 +475,9 @@ curl -X POST http://127.0.0.1:8000/api/v1/targets/$TARGET_ID/credentials \
 | `POST` | `/targets/{id}/credentials/{cid}/rotate` | Replace, incrementing version |
 | `DELETE` | `/targets/{id}/credentials/{cid}` | Delete |
 
-The API can return a stored secret via `.../credentials/{cid}/resolve`. The web UI
-deliberately never calls it. Do not use it from untrusted clients.
+Credential plaintext is **never returned by the API.** The execution engine resolves
+credentials in-process; there is no HTTP endpoint that decrypts a stored value for a
+caller, and the browser never has access to one.
 
 ### Tests, executions, findings
 

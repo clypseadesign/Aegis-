@@ -72,7 +72,7 @@ All items previously listed here are complete. For the current roadmap, see
 - [x] Implement target credential storage, secret resolution, and credential lifecycle management.
 - [x] Add encrypted `TargetCredential` model with versioning, revocation, and audit events.
 - [x] Add `SecretStore` (Fernet) and credential resolution backed by the target credential store.
-- [x] Add target credential API routes (create/list/get/resolve/revoke/rotate/delete) with redaction.
+- [x] Add target credential API routes (create/list/get/revoke/rotate/delete) with redaction. The plaintext resolve endpoint was later removed entirely; plaintext is resolved in-process by the execution engine only.
 - [x] Add credential service and API tests.
 - [x] Implement outbound network policy, SSRF protection, DNS rebinding defense, and redirect handling.
 - [x] Add `app/security/network.py` policy validation integrated into the base adapter and covered by tests.

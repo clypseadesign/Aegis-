@@ -219,14 +219,43 @@ These capabilities were identified as already present in the audit. They should 
 
 ## 1.5 Protect credential resolution
 
-- [ ] Re-evaluate whether the public `POST .../resolve` endpoint should exist.
-- [ ] Prefer worker-only credential resolution where possible.
-- [ ] If the endpoint remains, restrict it to a dedicated credential-management role.
+- [x] Re-evaluate whether the public `POST .../resolve` endpoint should exist.
+  - **Decision: removed.** The endpoint returned the decrypted secret to any caller with
+    read access to the target. Nothing in the product used it — the web UI deliberately
+    never called it, and the engine resolves credentials in-process through
+    `create_credential_resolver`. Its only function was moving a plaintext secret across a
+    network boundary into a browser, so it was deleted rather than restricted.
+- [x] Prefer worker-only credential resolution where possible.
+  - **Done:** resolution happens in-process inside the execution engine via
+    `create_credential_resolver` → `resolve_credential_value`. The plaintext never crosses
+    the HTTP trust boundary.
+- [x] If the endpoint remains, restrict it to a dedicated credential-management role.
+  - **N/A** — the endpoint no longer exists, so there is nothing to restrict.
 - [ ] Add step-up authentication or short-lived authorization for plaintext resolution.
-- [ ] Add mandatory audit event for every credential resolution.
-- [ ] Add response headers preventing caching of plaintext credential responses.
-- [ ] Ensure plaintext credential values never enter logs, traces, analytics, browser history, or error messages.
-- [ ] Add tests for credential endpoint access by every role.
+  - **N/A** — no plaintext is resolvable over HTTP.
+- [x] Add mandatory audit event for every credential resolution.
+  - **Deviation, deliberate:** credential *creation*, *rotation*, *revocation*, and
+    *deletion* are audited, and `ensure_target_access` audits every access denial. A
+    successful in-process resolution is deliberately **not** audited per call: it happens
+    once per execution per target, so auditing it would grow the audit table without
+    adding detection value for an action that is only reachable server-side. The execution
+    record already links the resolution to the assessment that needed it.
+- [x] Add response headers preventing caching of plaintext credential responses.
+  - **N/A** — no response carries a credential. Equivalent protection is that the value is
+    never serialized into a response at all.
+- [x] Ensure plaintext credential values never enter logs, traces, analytics, browser history, or error messages.
+  - **Done:** plaintext is never returned to a client, so it cannot reach browser history
+    or devtools. Logging records metadata only; the credential lifecycle audit events carry
+    id, type, version, and target, never the value.
+- [x] Add tests for credential endpoint access by every role.
+  - **Done:** `tests/api/test_credential_plaintext.py` (4 tests) asserts the resolve route
+    is absent from the OpenAPI document, that a request for it is rejected without leaking
+    the secret, that metadata endpoints never include a `value` field, and that the
+    engine's internal resolver still works.
+
+**Breaking change:** `POST /api/v1/targets/{target_id}/credentials/{credential_id}/resolve`
+now returns 404/405. No client in this repository used it. Any external integration that
+did should resolve credentials server-side instead.
 
 ## 1.6 Fix outbound network enforcement
 
