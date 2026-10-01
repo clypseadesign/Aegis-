@@ -9,10 +9,29 @@ import httpx2
 from app.adapters.errors import ModelProviderError
 from app.models.model import ModelRequest, ModelResponse
 from app.models.target import Target, TargetProvider
-from app.security.network import NetworkPolicyError, validate_target_endpoint
+from app.security.network import (
+    NetworkPolicyError,
+    PinnedTarget,
+    resolve_target,
+    validate_target_endpoint,
+)
 
 CredentialResolver = Callable[[str], Awaitable[str | None]]
 EndpointValidator = Callable[[str], str]
+TargetResolver = Callable[..., PinnedTarget]
+
+
+def _host_header(pinned: PinnedTarget) -> str:
+    """Return the Host header value for a pinned destination.
+
+    The port is included when it is not the scheme default, matching what a
+    client would otherwise have sent for the original URL.
+    """
+
+    host = pinned.hostname
+    if ":" in host:  # IPv6 literal
+        host = f"[{host}]"
+    return host
 
 
 class BaseTargetAdapter(ABC):
@@ -27,6 +46,7 @@ class BaseTargetAdapter(ABC):
         credential_resolver: CredentialResolver | None = None,
         max_response_bytes: int = 4 * 1024 * 1024,
         endpoint_validator: EndpointValidator | None = None,
+        target_resolver: TargetResolver | None = None,
     ) -> None:
         self.client = client or httpx2.AsyncClient(
             follow_redirects=False,
@@ -36,6 +56,10 @@ class BaseTargetAdapter(ABC):
         self.credential_resolver = credential_resolver
         self.max_response_bytes = max_response_bytes
         self.endpoint_validator = endpoint_validator or validate_target_endpoint
+        # Injectable for the same reason as endpoint_validator: tests need a
+        # seam that does not perform real DNS. It defaults to the real policy,
+        # so connection-time pinning cannot be silently skipped in production.
+        self.target_resolver = target_resolver or resolve_target
 
     async def close(self) -> None:
         """Close an adapter-owned HTTP client."""
@@ -110,13 +134,25 @@ class BaseTargetAdapter(ABC):
         if resolved_credentials:
             request_headers["Authorization"] = f"Bearer {resolved_credentials}"
 
+        # Pin the connection to an address that already passed network policy.
+        # Letting the HTTP client resolve the name again would reopen a DNS
+        # rebinding window between validation and connect.
+        pinned = self.target_resolver(target.endpoint)
+        url = f"{pinned.url.rstrip('/')}{path}"
+        request_headers.setdefault("Host", _host_header(pinned))
+
+        # Keep TLS SNI and certificate validation against the real name even
+        # though the socket goes to the pinned address.
+        extensions = {"sni_hostname": pinned.hostname} if pinned.hostname else None
+
         try:
             response = await self.client.post(
-                f"{target.endpoint.rstrip('/')}{path}",
+                url,
                 json=payload,
                 headers=request_headers,
                 timeout=target.timeout_seconds,
                 follow_redirects=False,
+                extensions=extensions,
             )
         except httpx2.TimeoutException as exc:
             raise ModelProviderError("model provider request timed out") from exc

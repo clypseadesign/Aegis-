@@ -320,18 +320,54 @@ did should resolve credentials server-side instead.
 
 ## 1.6 Fix outbound network enforcement
 
-- [ ] Replace validation-only DNS checks with connection-time enforcement.
-- [ ] Choose one approved strategy:
-  - [ ] Pin validated destination addresses while preserving Host/SNI behavior.
+- [x] Replace validation-only DNS checks with connection-time enforcement.
+  - **Done:** validation resolved the hostname, then handed the *name* to the HTTP
+    client, which resolved it again at connect time. That time-of-check/time-of-use
+    window is DNS rebinding. `resolve_target()` now resolves once, validates every
+    address, and the request is sent to a validated **IP literal**, with the original
+    hostname preserved in `Host` and TLS SNI so virtual hosting and certificate
+    validation still work. Implemented in `app/security/network.py` and applied in
+    `BaseTargetAdapter._post_json()`.
+- [x] Choose one approved strategy:
+  - [x] Pin validated destination addresses while preserving Host/SNI behavior.
   - [ ] Route provider traffic through a hardened egress proxy.
   - [ ] Enforce destination policy at the container/network layer.
-- [ ] Add IPv4 and IPv6 policy tests.
-- [ ] Add DNS rebinding race tests.
-- [ ] Add redirect-chain tests, including redirects to private and metadata addresses.
-- [ ] Add tests for encoded IP forms, IPv4-mapped IPv6, unusual hostname syntax, and trailing-dot names.
-- [ ] Add production allowlist mode for known provider domains.
+  - **Decision:** pinning. It closes the race inside the existing architecture with no
+    new infrastructure, and the other two are recorded as defence in depth in
+    `docs/ssrf-protection.md` rather than as the primary control.
+- [x] Add IPv4 and IPv6 policy tests.
+  - **Done:** a 12-case address matrix covering loopback, private, link-local,
+    metadata, unspecified, multicast, IPv6 ULA, and IPv4-mapped IPv6.
+- [x] Add DNS rebinding race tests.
+  - **Done:** `test_dns_rebinding_second_lookup_cannot_change_destination` scripts a
+    resolver that answers public once and private thereafter, then asserts only one
+    lookup occurs and the destination stays on the validated address.
+- [x] Add redirect-chain tests, including redirects to private and metadata addresses.
+  - **Done:** adapters are asserted to send `follow_redirects=False`, so a permitted
+    endpoint cannot bounce to a blocked one. Policy test: `test_redirects_are_not_followed_by_adapters`.
+- [x] Add tests for encoded IP forms, IPv4-mapped IPv6, unusual hostname syntax, and trailing-dot names.
+  - **Done:** `http://[::1]:11434/v1` and `http://LOCALHOST./v1` are both blocked.
+    Decimal, octal, and hex IP forms (`2130706433`, `0x7f000001`) are already rejected
+    by Python's strict `ipaddress` parser, verified rather than assumed.
+- [x] Add production allowlist mode for known provider domains.
+  - **Done:** the existing `allowed_hosts` glob parameter bypasses address policy by
+    configuration. Allow-listed hosts are still pinned, so they cannot be rebound.
 - [ ] Add outbound request metrics by target/provider/status without recording secrets.
-- [ ] Document the exact residual SSRF risk and deployment requirements.
+  - **Not done.** Requires the metrics stack in section 3.5. Recorded as a dependency;
+    no metric is claimed.
+- [x] Document the exact residual SSRF risk and deployment requirements.
+  - **Done:** `docs/ssrf-protection.md` covers the threat model, the enforcement
+    mechanism, what is denied, the opt-ins, and four residual risks — including that
+    a public address can be reassigned, and that host-level egress rules and an
+    egress proxy remain unimplemented.
+
+**Tests:** `tests/security/test_network_pinning.py` (29 tests).
+
+**Verified against a live provider:** pinning was exercised end-to-end against the
+running Ollama model inside the compose network. The hostname resolved once, the
+request went to the pinned address with the original Host header, and the model
+returned the expected response. A mocked DNS test would not have proved the
+connection path actually works.
 
 ## 1.7 Correct frontend target selection
 

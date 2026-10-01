@@ -14,6 +14,7 @@ from app.adapters.openai_compatible import OpenAICompatibleAdapter
 from app.adapters.registry import AdapterRegistry
 from app.models.model import ModelMessage, ModelRequest
 from app.models.target import Target, TargetProvider
+from app.security.network import PinnedTarget
 
 
 class FakeResponse:
@@ -23,6 +24,12 @@ class FakeResponse:
 
     def json(self) -> Any:
         return json.loads(self.content.decode("utf-8"))
+
+
+def _bypass_resolver(endpoint: str) -> PinnedTarget:
+    """Pin without DNS; these tests use unroutable example domains."""
+
+    return PinnedTarget(url=endpoint, hostname="model.example.com", address="127.0.0.1")
 
 
 class FakeClient:
@@ -50,6 +57,7 @@ class FakeClient:
         headers: dict[str, str] | None = None,
         timeout: float | None = None,
         follow_redirects: bool = False,
+        extensions: dict[str, Any] | None = None,
     ) -> Any:
         self.calls.append(
             {
@@ -114,7 +122,9 @@ def test_registry_creates_adapter_per_provider() -> None:
 
 def test_validate_target_rejects_missing_endpoint() -> None:
     adapter = OpenAICompatibleAdapter(
-        client=cast(Any, FakeClient()), endpoint_validator=_bypass_validator
+        client=cast(Any, FakeClient()),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
     )
     target = _make_target(provider=TargetProvider.OPENAI_COMPATIBLE, endpoint="")
     with pytest.raises(ValueError):
@@ -123,7 +133,9 @@ def test_validate_target_rejects_missing_endpoint() -> None:
 
 def test_generate_rejects_provider_mismatch() -> None:
     adapter = OpenAICompatibleAdapter(
-        client=cast(Any, FakeClient()), endpoint_validator=_bypass_validator
+        client=cast(Any, FakeClient()),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
     )
     target = _make_target(provider=TargetProvider.OLLAMA)
     with pytest.raises(ValueError):
@@ -132,7 +144,9 @@ def test_generate_rejects_provider_mismatch() -> None:
 
 def test_generate_rejects_missing_model() -> None:
     adapter = OpenAICompatibleAdapter(
-        client=cast(Any, FakeClient()), endpoint_validator=_bypass_validator
+        client=cast(Any, FakeClient()),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
     )
     target = _make_target(provider=TargetProvider.OPENAI_COMPATIBLE, model=None)
     with pytest.raises(ValueError):
@@ -157,7 +171,11 @@ def test_openai_compatible_adapter_returns_normalized_output() -> None:
             },
         }
     )
-    adapter = OpenAICompatibleAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = OpenAICompatibleAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.OPENAI_COMPATIBLE)
     response = _run(adapter.generate(target, _make_request(), credentials="secret"))
 
@@ -179,7 +197,11 @@ def test_ollama_adapter_parses_message_content() -> None:
             "message": {"role": "assistant", "content": "hi from ollama"},
         }
     )
-    adapter = OllamaAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = OllamaAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.OLLAMA)
     response = _run(adapter.generate(target, _make_request()))
 
@@ -204,7 +226,11 @@ def test_ollama_adapter_disables_streaming() -> None:
             "message": {"role": "assistant", "content": "ok"},
         }
     )
-    adapter = OllamaAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = OllamaAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.OLLAMA)
     _run(adapter.generate(target, _make_request()))
 
@@ -213,7 +239,11 @@ def test_ollama_adapter_disables_streaming() -> None:
 
 def test_custom_rest_adapter_uses_configured_response_path() -> None:
     fake = FakeClient(body={"output": "custom rest reply"})
-    adapter = CustomRESTAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = CustomRESTAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.CUSTOM_REST)
     response = _run(adapter.generate(target, _make_request(), credentials="tok"))
 
@@ -225,7 +255,11 @@ def test_custom_rest_adapter_uses_configured_response_path() -> None:
 
 def test_custom_rest_adapter_falls_back_on_unexpected_shape() -> None:
     fake = FakeClient(body={"response": "fallback output"})
-    adapter = CustomRESTAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = CustomRESTAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.CUSTOM_REST)
     response = _run(adapter.generate(target, _make_request()))
 
@@ -234,7 +268,11 @@ def test_custom_rest_adapter_falls_back_on_unexpected_shape() -> None:
 
 def test_openai_compatible_adapter_raises_on_missing_choices() -> None:
     fake = FakeClient(body={"unexpected": "shape"})
-    adapter = OpenAICompatibleAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = OpenAICompatibleAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.OPENAI_COMPATIBLE)
     with pytest.raises(ModelProviderError):
         _run(adapter.generate(target, _make_request()))
@@ -242,7 +280,11 @@ def test_openai_compatible_adapter_raises_on_missing_choices() -> None:
 
 def test_custom_rest_adapter_raises_on_no_output() -> None:
     fake = FakeClient(body={"nothing": "here"})
-    adapter = CustomRESTAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = CustomRESTAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.CUSTOM_REST)
     with pytest.raises(ModelProviderError):
         _run(adapter.generate(target, _make_request()))
@@ -250,7 +292,11 @@ def test_custom_rest_adapter_raises_on_no_output() -> None:
 
 def test_base_adapter_raises_on_http_error_status() -> None:
     fake = FakeClient(status_code=502, body={"error": "bad gateway"})
-    adapter = OpenAICompatibleAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = OpenAICompatibleAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.OPENAI_COMPATIBLE)
     with pytest.raises(ModelProviderError, match="HTTP 502"):
         _run(adapter.generate(target, _make_request()))
@@ -258,7 +304,11 @@ def test_base_adapter_raises_on_http_error_status() -> None:
 
 def test_base_adapter_raises_on_timeout_exception() -> None:
     fake = FakeClient(exc=httpx2.TimeoutException("slow"))
-    adapter = OpenAICompatibleAdapter(client=cast(Any, fake), endpoint_validator=_bypass_validator)
+    adapter = OpenAICompatibleAdapter(
+        client=cast(Any, fake),
+        endpoint_validator=_bypass_validator,
+        target_resolver=_bypass_resolver,
+    )
     target = _make_target(provider=TargetProvider.OPENAI_COMPATIBLE)
     with pytest.raises(ModelProviderError, match="timed out"):
         _run(adapter.generate(target, _make_request()))

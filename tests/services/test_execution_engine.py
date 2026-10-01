@@ -22,6 +22,7 @@ from app.schemas import (
     TargetCreate,
     UserCreate,
 )
+from app.security.network import PinnedTarget
 from app.security.secrets import SecretStore
 from app.services.assessments import create_execution, create_security_test
 from app.services.auth import register_user
@@ -34,6 +35,12 @@ from sqlalchemy.orm import Session
 
 def _bypass_validator(url: str) -> str:
     return url
+
+
+def _bypass_resolver(endpoint: str) -> PinnedTarget:
+    """Pin without touching DNS; these tests use an unroutable example domain."""
+
+    return PinnedTarget(url=endpoint, hostname="model.example.com", address="127.0.0.1")
 
 
 def _findings(session: Session, execution_id: UUID) -> list[Finding]:
@@ -82,6 +89,7 @@ class FakeClient:
         headers: dict[str, str] | None = None,
         timeout: float | None = None,
         follow_redirects: bool = False,
+        extensions: dict[str, Any] | None = None,
     ) -> Any:
         self.call_count += 1
         self.calls.append({"url": url, "json": json, "headers": headers})
@@ -146,6 +154,7 @@ def _make_openai_factory(
         return OpenAICompatibleAdapter(
             client=cast(Any, fake),
             endpoint_validator=_bypass_validator,
+            target_resolver=_bypass_resolver,
             credential_resolver=kwargs.get("credential_resolver"),
         )
 
@@ -392,6 +401,7 @@ def test_execution_retries_on_transient_failure() -> None:
             return OpenAICompatibleAdapter(
                 client=cast(Any, fake),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=kwargs.get("credential_resolver"),
             )
 
@@ -599,6 +609,7 @@ class MultiResponseClient(FakeClient):
         headers: dict[str, str] | None = None,
         timeout: float | None = None,
         follow_redirects: bool = False,
+        extensions: dict[str, Any] | None = None,
     ) -> Any:
         self.call_count += 1
         idx = min(self.call_count - 1, len(self._responses) - 1)
@@ -673,6 +684,7 @@ def test_multi_turn_execution_creates_steps_and_finding() -> None:
             return OpenAICompatibleAdapter(
                 client=cast(Any, client),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=kwargs.get("credential_resolver"),
             )
 
@@ -746,6 +758,7 @@ def test_multi_turn_no_findings_passes() -> None:
             return OpenAICompatibleAdapter(
                 client=cast(Any, client),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=kwargs.get("credential_resolver"),
             )
 
@@ -810,6 +823,7 @@ def test_multi_turn_preserves_conversation_history() -> None:
             return OpenAICompatibleAdapter(
                 client=cast(Any, client),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=kwargs.get("credential_resolver"),
             )
 
@@ -883,6 +897,7 @@ def test_multi_turn_with_system_prompt() -> None:
             return OpenAICompatibleAdapter(
                 client=cast(Any, client),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=kwargs.get("credential_resolver"),
             )
 
@@ -958,6 +973,7 @@ def test_judge_model_grading_fail() -> None:
                     FakeClient(body=_openai_body("The model is vulnerable to prompt injection.")),
                 ),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=kwargs.get("credential_resolver"),
             )
 
@@ -967,6 +983,7 @@ def test_judge_model_grading_fail() -> None:
                     Any, FakeClient(body=_openai_body("VERDICT: The model is vulnerable."))
                 ),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=None,
             )
 
@@ -1037,6 +1054,7 @@ def test_judge_model_grading_pass() -> None:
             return OpenAICompatibleAdapter(
                 client=cast(Any, FakeClient(body=_openai_body("I'm doing fine, thanks!"))),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=kwargs.get("credential_resolver"),
             )
 
@@ -1044,6 +1062,7 @@ def test_judge_model_grading_pass() -> None:
             return OpenAICompatibleAdapter(
                 client=cast(Any, FakeClient(body=_openai_body("VERDICT: The model is safe."))),
                 endpoint_validator=_bypass_validator,
+                target_resolver=_bypass_resolver,
                 credential_resolver=None,
             )
 

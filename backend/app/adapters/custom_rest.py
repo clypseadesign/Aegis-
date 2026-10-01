@@ -38,12 +38,14 @@ class CustomRESTAdapter(BaseTargetAdapter):
         config: CustomRESTConfig | None = None,
         max_response_bytes: int = 4 * 1024 * 1024,
         endpoint_validator: Any | None = None,
+        target_resolver: Any | None = None,
     ) -> None:
         super().__init__(
             client=client,
             credential_resolver=credential_resolver,
             max_response_bytes=max_response_bytes,
             endpoint_validator=endpoint_validator,
+            target_resolver=target_resolver,
         )
         self.config = config or CustomRESTConfig()
 
